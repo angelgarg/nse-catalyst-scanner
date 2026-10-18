@@ -1,0 +1,38 @@
+{
+  "INFY": {
+    "name": "Infosys",
+    "anchor": 1040.0,
+    "drift6m": -0.24,
+    "sigma": 0.018
+  },
+  "RELIANCE": {
+    "name": "Reliance Industries",
+    "anchor": 1309.0,
+    "drift6m": -0.16,
+    "sigma": 0.014
+  },
+  "HDFCBANK": {
+    "name": "HDFC Bank",
+    "anchor": 780.0,
+    "drift6m": -0.05,
+    "sigma": 0.013
+  },
+  "TMPV": {
+    "name": "Tata Motors Passenger Vehicles",
+    "anchor": 359.0,
+    "drift6m": 0.04,
+    "sigma": 0.022
+  },
+  "SUNPHARMA": {
+    "name": "Sun Pharma",
+    "anchor": 1840.0,
+    "drift6m": 0.05,
+    "sigma": 0.015
+  },
+  "NIFTYBEES": {
+    "name": "Nippon India ETF Nifty 50 BeES",
+    "anchor": 277.42999267578125,
+    "drift6m": -0.06279980078315606,
+    "sigma": 0.009871560083825635
+  }
+}
