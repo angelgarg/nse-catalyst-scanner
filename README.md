@@ -36,7 +36,7 @@ than 1.5σ from its own 20-day norm **and** volume is above 1.25× its 20-day av
 |---|---|---|
 | `ci` | every PR / push | pytest, flutter analyze + test, release APK compiles |
 | `data` | 17:45 + 09:00 IST weekdays | rebuild data → Pages; failure keeps old data + opens `ops` issue |
-| `deploy-verify` | push touching backend | waits for Render to serve the commit; reverts it if unhealthy |
+| `deploy-verify` | push touching backend | waits for Render to serve the commit; opens a revert PR + `ops` issue if unhealthy |
 | `android` | push touching `app/`, tags `v*` | signed AAB + APK; Play internal track when credentials are set |
 | `monitor` | hourly | checks data freshness + API; opens `ops` issue |
 

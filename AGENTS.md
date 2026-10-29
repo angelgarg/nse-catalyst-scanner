@@ -29,7 +29,9 @@ Changes are **auto-merged** once CI is green, so these rules are the safety net.
    Never push to `main` directly, never force-push, never disable a test to make CI pass.
 9. If you bump the app's user-visible behaviour, bump `version:` in `app/pubspec.yaml` (patch for fixes,
    minor for features). The build number is set by CI.
-10. Record what you did: comment on the issue you worked from and close it when the PR merges.
+10. Rollback PRs (`rollback/<sha>`, opened by the deploy-verify bot) are pre-approved: push an empty commit
+    (`git commit --allow-empty -m "ci: run checks"`) to start CI, then merge when green.
+11. Record what you did: comment on the issue you worked from and close it when the PR merges.
 
 ## Local checks before opening a PR
 ```bash

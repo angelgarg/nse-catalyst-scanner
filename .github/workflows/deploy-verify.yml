@@ -1,5 +1,5 @@
 # Render auto-deploys every push to main. This waits for the new commit to be live
-# and healthy; if it never comes up, the commit is reverted automatically.
+# and healthy; if it never comes up, a revert PR + ops issue are opened automatically.
 name: deploy-verify
 on:
   push:
@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 jobs:
   verify:
     if: "!startsWith(github.event.head_commit.message, 'Revert')"
@@ -28,14 +29,21 @@ jobs:
             sleep 30
           done
           exit 1
-      - name: Roll back
+      - name: Open rollback PR
         if: failure() && steps.wait.outcome == 'failure'
         env: {GH_TOKEN: "${{ github.token }}"}
         run: |
+          # main requires green CI, so the revert goes through a PR. Render keeps the previous
+          # healthy instance live meanwhile; the Ops agent pushes to this branch to run CI and merges.
           git config user.name "spikewise-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          b="rollback/${GITHUB_SHA::7}"
+          git checkout -b "$b"
           git revert --no-edit "$GITHUB_SHA"
-          git push origin HEAD:main
+          git push origin "$b"
+          pr=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$b" --label ops \
+            --title "Rollback ${GITHUB_SHA::7}: Render deploy unhealthy" \
+            --body "Commit $GITHUB_SHA did not become healthy on Render within 20 min. CI does not start on bot PRs: push an empty commit to this branch to run checks, then merge.")
           gh issue create --repo "$GITHUB_REPOSITORY" --label ops \
-            --title "Auto-rollback of ${GITHUB_SHA::7}: Render deploy unhealthy" \
-            --body "Commit $GITHUB_SHA did not become healthy on Render within 20 min and was reverted. Check Render logs." || true
+            --title "Render deploy of ${GITHUB_SHA::7} unhealthy: rollback PR open" \
+            --body "Rollback PR: $pr. Check Render logs for the cause." || true
