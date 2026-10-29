@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../config.dart';
+import '../services/alerts.dart';
 import '../services/billing.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 import 'feed_screen.dart';
 import 'more_screen.dart';
 import 'search_screen.dart';
+import 'stock_detail_screen.dart';
 import 'watchlist_screen.dart';
 
 final _buildProvider = FutureProvider<int>((_) async =>
@@ -55,13 +57,43 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   int _tab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    Alerts.tapped.addListener(_onTap);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onTap());
+  }
+
+  @override
+  void dispose() {
+    Alerts.tapped.removeListener(_onTap);
+    super.dispose();
+  }
+
+  void _onTap() {
+    final p = Alerts.tapped.value;
+    if (p == null || !mounted) return;
+    Alerts.tapped.value = null;
+    if (p.startsWith('stock:')) {
+      final parts = p.substring(6).split('|');
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => StockDetailScreen(
+              ticker: parts.first,
+              focusDate: parts.length > 1 ? parts[1] : null)));
+    } else {
+      setState(() => _tab = 0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     ref.watch(billingProvider); // start billing + restore entitlement on launch
     final minBuild = ref.watch(configProvider).valueOrNull?.minAppBuild ?? 0;
     final build = ref.watch(_buildProvider).valueOrNull;
     if (build != null && build < minBuild) return const _UpdateRequired();
     final pages = [
-      WatchlistScreen(onAdd: () => setState(() => _tab = 2)),
+      WatchlistScreen(
+          onAdd: () => setState(() => _tab = 2),
+          onOpenFeed: () => setState(() => _tab = 1)),
       const FeedScreen(),
       const SearchScreen(),
       const MoreScreen(),

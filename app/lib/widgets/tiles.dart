@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../learn/explainers.dart';
+import '../motion.dart';
 import '../screens/stock_detail_screen.dart';
 import '../theme.dart';
 import 'format.dart';
@@ -37,11 +39,17 @@ class StockTile extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(s.ticker,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Hero(
+                        tag: 'ticker-${s.ticker}',
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: Text(s.ticker,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                       Text(s.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -103,92 +111,125 @@ class EventTile extends StatelessWidget {
   final SpikeEvent e;
   final bool showTicker;
   final void Function(String url)? onOpenLink;
+
+  /// Briefly outlined in amber when the user jumps here from the chart.
+  final bool highlight;
   const EventTile(
-      {super.key, required this.e, this.showTicker = true, this.onOpenLink});
+      {super.key,
+      required this.e,
+      this.showTicker = true,
+      this.onOpenLink,
+      this.highlight = false});
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final c = e.up ? upColor(context) : downColor(context);
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: showTicker ? () => openStock(context, e.ticker) : null,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(prettyDate(e.date),
-                style: tt.labelSmall?.copyWith(color: muted)),
-            const SizedBox(height: 2),
-            Row(children: [
-              Icon(e.up ? Icons.arrow_upward : Icons.arrow_downward,
-                  color: c, size: 18, semanticLabel: e.up ? 'Up' : 'Down'),
-              const SizedBox(width: 6),
-              if (showTicker) ...[
-                Flexible(
-                  child: Text(e.ticker,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Text(pct(e.ret, digits: 2),
-                  style: tt.titleSmall?.copyWith(
-                      color: c,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: tabular)),
-            ]),
-            const SizedBox(height: 4),
-            Text('${moveSize(e.z)}: ${vsMarket(e.z)} · ${volumeText(e.vr)}',
-                style: tt.bodySmall),
-            if (e.announcement != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                [
-                  e.routine
-                      ? 'Routine filing near this date'
-                      : 'Filing near this date',
-                  if (e.exchange != null)
-                    '(${e.exchange}${e.filedRelative != null ? ', ${e.filedRelative}' : ''})',
-                ].join(' '),
-                style: tt.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: e.routine ? muted : null),
-              ),
-              if (e.category != null)
-                Text(e.category!, style: tt.bodySmall?.copyWith(color: muted)),
-              Text(e.announcement!,
-                  maxLines: e.routine ? 2 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodySmall),
-              Text('May not be the cause of the move.',
+    return AnimatedContainer(
+      duration: Motion.of(context, highlight ? Motion.short : Motion.settle),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: highlight ? kSpike : Colors.transparent, width: 2),
+      ),
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: showTicker ? () => openStock(context, e.ticker) : null,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(prettyDate(e.date),
                   style: tt.labelSmall?.copyWith(color: muted)),
-              if (e.link != null && onOpenLink != null)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                    onPressed: () => onOpenLink!(e.link!),
-                    icon: const Icon(Icons.open_in_new, size: 16),
-                    label: const Text('Read the filing'),
+              const SizedBox(height: 2),
+              Row(children: [
+                Icon(e.up ? Icons.arrow_upward : Icons.arrow_downward,
+                    color: c, size: 18, semanticLabel: e.up ? 'Up' : 'Down'),
+                const SizedBox(width: 6),
+                if (showTicker) ...[
+                  Flexible(
+                    child: Text(e.ticker,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700)),
                   ),
-                ),
-            ] else ...[
-              const SizedBox(height: 6),
+                  const SizedBox(width: 8),
+                ],
+                Text(pct(e.ret, digits: 2),
+                    style: tt.titleSmall?.copyWith(
+                        color: c,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: tabular)),
+              ]),
+              const SizedBox(height: 4),
               Text(
-                  DateTime.tryParse(e.date)?.isBefore(DateTime.now()
-                              .subtract(const Duration(days: 32))) ??
-                          false
-                      ? 'Filings are only checked for spikes in the last 30 days.'
-                      : 'No company filing found near this date.',
-                  style: tt.bodySmall
-                      ?.copyWith(fontStyle: FontStyle.italic, color: muted)),
-            ],
-          ]),
+                  '${vsMarket(e.z)[0].toUpperCase()}${vsMarket(e.z).substring(1)}',
+                  style: tt.bodySmall),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: -4, children: [
+                WhyChip(label: moveSize(e.z), explainer: 'move_size'),
+                if (e.vr != null)
+                  WhyChip(label: volumeText(e.vr), explainer: 'volume'),
+                WhyChip(label: 'vs NIFTY', explainer: 'vs_market'),
+              ]),
+              if (e.announcement != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  [
+                    e.routine
+                        ? 'Routine filing near this date'
+                        : 'Filing near this date',
+                    if (e.exchange != null)
+                      '(${e.exchange}${e.filedRelative != null ? ', ${e.filedRelative}' : ''})',
+                  ].join(' '),
+                  style: tt.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: e.routine ? muted : null),
+                ),
+                if (e.category != null)
+                  Text(e.category!,
+                      style: tt.bodySmall?.copyWith(color: muted)),
+                Text(e.announcement!,
+                    maxLines: e.routine ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall),
+                Row(children: [
+                  Flexible(
+                    child: Text('May not be the cause of the move.',
+                        style: tt.labelSmall?.copyWith(color: muted)),
+                  ),
+                  const SizedBox(width: 6),
+                  WhyChip(
+                      label: e.routine ? 'Routine?' : 'Is it the reason?',
+                      explainer: e.routine ? 'routine_filing' : 'filing_check'),
+                ]),
+                if (e.link != null && onOpenLink != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: () => onOpenLink!(e.link!),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('Read the filing'),
+                    ),
+                  ),
+              ] else ...[
+                const SizedBox(height: 6),
+                Text(
+                    DateTime.tryParse(e.date)?.isBefore(DateTime.now()
+                                .subtract(const Duration(days: 32))) ??
+                            false
+                        ? 'Filings are only checked for spikes in the last 30 days.'
+                        : 'No company filing found near this date.',
+                    style: tt.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic, color: muted)),
+                WhyChip(label: 'Why no filing?', explainer: 'no_filing'),
+              ],
+            ]),
+          ),
         ),
       ),
     );

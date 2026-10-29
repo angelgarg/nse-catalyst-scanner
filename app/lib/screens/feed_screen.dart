@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/spike_mark.dart';
 import '../widgets/tiles.dart';
 
 class FeedScreen extends ConsumerStatefulWidget {
@@ -28,7 +29,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Spike feed')),
       body: events.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: SpikeMarkLoader()),
         error: (e, _) =>
             ErrorRetry(error: e, onRetry: () => ref.invalidate(eventsProvider)),
         data: (all) {

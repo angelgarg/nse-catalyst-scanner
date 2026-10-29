@@ -6,6 +6,7 @@ import '../config.dart';
 import '../services/billing.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/spike_mark.dart';
 
 class PaywallScreen extends ConsumerWidget {
   const PaywallScreen({super.key});
@@ -52,7 +53,7 @@ class PaywallScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         if (!pro) ...[
           if (billing.loading)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: SpikeMarkLoader())
           else if (!billing.available || billing.products.isEmpty)
             const Card(
               child: ListTile(

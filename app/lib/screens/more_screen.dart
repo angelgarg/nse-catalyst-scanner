@@ -7,6 +7,7 @@ import '../services/alerts.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/format.dart';
+import '../learn/explainers.dart';
 import 'feedback_screen.dart';
 import 'onboarding_screen.dart';
 
@@ -15,18 +16,12 @@ final _versionProvider = FutureProvider((_) => PackageInfo.fromPlatform());
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
-  Future<void> _toggleAlerts(
-      BuildContext context, WidgetRef ref, bool on) async {
-    final pref = ref.read(boolPrefProvider(kAlertsKey).notifier);
-    if (!on) {
-      await Alerts.disable();
-      await pref.set(false);
-      return;
-    }
+  Future<void> _toggle(
+      BuildContext context, WidgetRef ref, String key, bool on) async {
     final meta = await ref.read(metaProvider.future);
-    final ok = await Alerts.enable(meta.lastMarketDate);
+    final ok = await Alerts.set(key, on, meta.lastMarketDate);
     if (ok) {
-      await pref.set(true);
+      ref.invalidate(boolPrefProvider(key));
     } else if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -37,7 +32,8 @@ class MoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pro = ref.watch(proProvider);
-    final alerts = ref.watch(boolPrefProvider(kAlertsKey));
+    final alerts = ref.watch(boolPrefProvider(Alerts.namedKey));
+    final digest = ref.watch(boolPrefProvider(Alerts.digestKey));
     final meta = ref.watch(metaProvider).valueOrNull;
     final version = ref.watch(_versionProvider).valueOrNull;
 
@@ -51,6 +47,14 @@ class MoreScreen extends ConsumerWidget {
               ? 'Manage in Google Play → Subscriptions'
               : 'Unlimited watchlist, alerts, full history'),
           onTap: () => openPaywall(context),
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.nights_stay_outlined),
+          title: const Text('Evening summary'),
+          subtitle: const Text(
+              'Free · after market close: how many stocks moved on their own, and whether yours did'),
+          value: digest,
+          onChanged: (v) => _toggle(context, ref, Alerts.digestKey, v),
         ),
         if (!pro)
           ListTile(
@@ -70,7 +74,7 @@ class MoreScreen extends ConsumerWidget {
                 : 'Pro feature'),
             value: pro && alerts,
             onChanged: pro
-                ? (v) => _toggleAlerts(context, ref, v)
+                ? (v) => _toggle(context, ref, Alerts.namedKey, v)
                 : (_) => openPaywall(context),
           ),
         const Divider(),
@@ -85,6 +89,13 @@ class MoreScreen extends ConsumerWidget {
           leading: const Icon(Icons.star_rate_outlined),
           title: const Text('Rate on Google Play'),
           onTap: () => openUrl(kPlayUrl),
+        ),
+        ListTile(
+          leading: const Icon(Icons.menu_book_outlined),
+          title: const Text('Learn the basics'),
+          subtitle: const Text('Short explainers in English and हिन्दी'),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const LearnScreen())),
         ),
         ListTile(
           leading: const Icon(Icons.school_outlined),
