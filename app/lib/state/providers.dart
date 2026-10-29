@@ -105,4 +105,3 @@ final boolPrefProvider =
     NotifierProvider.family<BoolPref, bool, String>(BoolPref.new);
 
 const kOnboardedKey = 'onboarded_v1';
-const kAlertsKey = 'alerts_on';

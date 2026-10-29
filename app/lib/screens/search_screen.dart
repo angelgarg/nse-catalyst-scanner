@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/spike_mark.dart';
 import '../widgets/tiles.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -56,7 +57,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
         Expanded(
           child: uni.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: SpikeMarkLoader()),
             error: (e, _) => ErrorRetry(
                 error: e, onRetry: () => ref.invalidate(universeProvider)),
             data: (all) {
