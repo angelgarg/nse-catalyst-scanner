@@ -7,7 +7,10 @@ class DataMeta {
   final String generated;
   final int stocks;
 
-  DataMeta({required this.lastMarketDate, required this.generated, required this.stocks});
+  DataMeta(
+      {required this.lastMarketDate,
+      required this.generated,
+      required this.stocks});
 
   factory DataMeta.fromJson(Map<String, dynamic> j) => DataMeta(
         lastMarketDate: j['last_market_date'] ?? '',
@@ -35,8 +38,11 @@ class RemoteConfig {
         minAppBuild: _i(j['min_app_build']),
         latestAppBuild: _i(j['latest_app_build']),
         notice: _s(j['notice']),
-        freeWatchlistLimit: j['free_watchlist_limit'] is num ? _i(j['free_watchlist_limit']) : 5,
-        freeHistoryDays: j['free_history_days'] is num ? _i(j['free_history_days']) : 30,
+        freeWatchlistLimit: j['free_watchlist_limit'] is num
+            ? _i(j['free_watchlist_limit'])
+            : 5,
+        freeHistoryDays:
+            j['free_history_days'] is num ? _i(j['free_history_days']) : 30,
       );
 }
 
@@ -116,6 +122,8 @@ class SpikeEvent {
   final String? announcement;
   final String? exchange;
   final String? link;
+  final String? filed;
+  final bool routine;
 
   SpikeEvent({
     required this.date,
@@ -129,6 +137,8 @@ class SpikeEvent {
     this.announcement,
     this.exchange,
     this.link,
+    this.filed,
+    this.routine = false,
   });
 
   factory SpikeEvent.fromJson(Map<String, dynamic> j) => SpikeEvent(
@@ -143,7 +153,20 @@ class SpikeEvent {
         announcement: _s(j['announcement']),
         exchange: _s(j['exchange']),
         link: _s(j['link']),
+        filed: _s(j['filed']),
+        routine: j['routine'] == true,
       );
+
+  /// "filed 2 days before" / "filed the same day" / "filed 1 day after".
+  String? get filedRelative {
+    final f = DateTime.tryParse(filed ?? ''), d = DateTime.tryParse(date);
+    if (f == null || d == null) return null;
+    final n = d.difference(DateTime(f.year, f.month, f.day)).inDays;
+    if (n == 0) return 'filed the same day';
+    return n > 0
+        ? 'filed $n day${n > 1 ? 's' : ''} before'
+        : 'filed ${-n} day${n < -1 ? 's' : ''} after';
+  }
 }
 
 class Headline {
@@ -195,13 +218,16 @@ class StockDetail {
     final close = (j['close'] as List? ?? const []).map(_d).toList();
     final summaryJson = Map<String, dynamic>.from(j)
       ..['sentiment'] = sent['label'] ?? 'neutral'
-      ..['spark'] = close.length > 30 ? close.sublist(close.length - 30) : close;
+      ..['spark'] =
+          close.length > 30 ? close.sublist(close.length - 30) : close;
     return StockDetail(
       summary: StockSummary.fromJson(summaryJson),
       dates: (j['dates'] as List? ?? const []).cast<String>(),
       close: close,
       ma20: (j['ma20'] as List? ?? const []).map(_d).toList(),
-      eventFlags: (j['event_flags'] as List? ?? const []).map((v) => v == true).toList(),
+      eventFlags: (j['event_flags'] as List? ?? const [])
+          .map((v) => v == true)
+          .toList(),
       annVol: _d(j['ann_vol']),
       beta: _d(j['beta']),
       mom5: _d(j['mom5']),
@@ -212,7 +238,8 @@ class StockDetail {
       sentimentLabel: sent['label'] ?? 'neutral',
       headlines: (sent['headlines'] as List? ?? const [])
           .whereType<Map>()
-          .map((h) => Headline(h['title'] ?? '', h['link'] ?? '', h['age'] ?? ''))
+          .map((h) =>
+              Headline(h['title'] ?? '', h['link'] ?? '', h['age'] ?? ''))
           .where((h) => h.title.isNotEmpty)
           .toList(),
       events: (j['events'] as List? ?? const [])

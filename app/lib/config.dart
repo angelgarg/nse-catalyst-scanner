@@ -6,13 +6,15 @@ const kApiUrl = 'https://nse-catalyst-scanner.onrender.com';
 const kSiteUrl = 'https://angelgarg.github.io/nse-catalyst-scanner';
 const kPrivacyUrl = '$kSiteUrl/privacy.html';
 const kTermsUrl = '$kSiteUrl/terms.html';
-const kPlayUrl = 'https://play.google.com/store/apps/details?id=com.angelgarg.spikewise';
+const kPlayUrl =
+    'https://play.google.com/store/apps/details?id=com.angelgarg.spikewise';
 
 const kProMonthly = 'spikewise_pro_monthly';
 const kProYearly = 'spikewise_pro_yearly';
 const kProductIds = {kProMonthly, kProYearly};
 
-const kDefaultWatchlist = ['RELIANCE', 'HDFCBANK', 'INFY', 'TCS', 'ICICIBANK'];
+// Three starter stocks, so a free user (limit 5) can add their own right away.
+const kDefaultWatchlist = ['RELIANCE', 'HDFCBANK', 'INFY'];
 
 /// File name used for a ticker in the data build ('M&M' -> 'M_M').
 String fileKey(String ticker) => ticker.replaceAll('&', '_');

@@ -5,11 +5,19 @@ import 'package:url_launcher/url_launcher.dart';
 import '../screens/paywall_screen.dart';
 import '../state/providers.dart';
 
+String friendlyError(Object e) {
+  final s = '$e';
+  // ApiException messages are written for users; anything else is not.
+  if (s == 'not_found') return 'We don\'t have data for this stock yet.';
+  if (e.runtimeType.toString() == 'ApiException') return s;
+  return 'Something went wrong. Pull down or tap below to try again.';
+}
+
 Future<void> openUrl(String url) =>
     launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 
-void openPaywall(BuildContext context) =>
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaywallScreen()));
+void openPaywall(BuildContext context) => Navigator.of(context)
+    .push(MaterialPageRoute(builder: (_) => const PaywallScreen()));
 
 class ErrorRetry extends StatelessWidget {
   final Object error;
@@ -23,9 +31,10 @@ class ErrorRetry extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.cloud_off, size: 44),
             const SizedBox(height: 12),
-            Text('$error', textAlign: TextAlign.center),
+            Text(friendlyError(error), textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('Try again')),
+            FilledButton.tonal(
+                onPressed: onRetry, child: const Text('Try again')),
           ]),
         ),
       );
@@ -62,8 +71,10 @@ class Disclaimer extends StatelessWidget {
           'Educational statistics from public data. Not investment advice and not a '
           'recommendation to buy or sell. Spikewise is not SEBI-registered.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       );
 }

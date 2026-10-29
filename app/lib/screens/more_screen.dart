@@ -15,7 +15,8 @@ final _versionProvider = FutureProvider((_) => PackageInfo.fromPlatform());
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
-  Future<void> _toggleAlerts(BuildContext context, WidgetRef ref, bool on) async {
+  Future<void> _toggleAlerts(
+      BuildContext context, WidgetRef ref, bool on) async {
     final pref = ref.read(boolPrefProvider(kAlertsKey).notifier);
     if (!on) {
       await Alerts.disable();
@@ -27,8 +28,9 @@ class MoreScreen extends ConsumerWidget {
     if (ok) {
       await pref.set(true);
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Allow notifications for Spikewise in Android settings to get alerts.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Allow notifications for Spikewise in Android settings to get alerts.')));
     }
   }
 
@@ -45,22 +47,39 @@ class MoreScreen extends ConsumerWidget {
         ListTile(
           leading: const Icon(Icons.workspace_premium_outlined),
           title: Text(pro ? 'Spikewise Pro: active' : 'Upgrade to Pro'),
-          subtitle: Text(pro ? 'Manage in Google Play → Subscriptions' : 'Unlimited watchlist, alerts, full history'),
+          subtitle: Text(pro
+              ? 'Manage in Google Play → Subscriptions'
+              : 'Unlimited watchlist, alerts, full history'),
           onTap: () => openPaywall(context),
         ),
-        SwitchListTile(
-          secondary: const Icon(Icons.notifications_active_outlined),
-          title: const Text('Spike alerts'),
-          subtitle: Text(pro ? 'Notify me when a watchlist stock spikes' : 'Pro feature'),
-          value: pro && alerts,
-          onChanged: pro ? (v) => _toggleAlerts(context, ref, v) : (_) => openPaywall(context),
-        ),
+        if (!pro)
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Spike alerts'),
+            subtitle: const Text(
+                'Evening alert when a stock you follow spikes · Pro'),
+            trailing: const Icon(Icons.lock_outline),
+            onTap: () => openPaywall(context),
+          )
+        else
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Spike alerts'),
+            subtitle: Text(pro
+                ? 'Evening alert after market close when a stock you follow spikes'
+                : 'Pro feature'),
+            value: pro && alerts,
+            onChanged: pro
+                ? (v) => _toggleAlerts(context, ref, v)
+                : (_) => openPaywall(context),
+          ),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.feedback_outlined),
           title: const Text('Send feedback'),
-          subtitle: const Text('Ideas and bugs go straight to the build queue'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+          subtitle: const Text('Ideas, bugs and wrong data'),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const FeedbackScreen())),
         ),
         ListTile(
           leading: const Icon(Icons.star_rate_outlined),
@@ -70,20 +89,28 @@ class MoreScreen extends ConsumerWidget {
         ListTile(
           leading: const Icon(Icons.school_outlined),
           title: const Text('How Spikewise works'),
-          onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const OnboardingScreen(replay: true))),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const OnboardingScreen(replay: true))),
         ),
-        ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy policy'), onTap: () => openUrl(kPrivacyUrl)),
-        ListTile(leading: const Icon(Icons.gavel_outlined), title: const Text('Terms & disclaimer'), onTap: () => openUrl(kTermsUrl)),
+        ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Privacy policy'),
+            onTap: () => openUrl(kPrivacyUrl)),
+        ListTile(
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text('Terms & disclaimer'),
+            onTap: () => openUrl(kTermsUrl)),
         const Divider(),
         ListTile(
           dense: true,
-          title: Text('Version ${version?.version ?? ''} (${version?.buildNumber ?? ''})'),
+          title: Text(
+              'Version ${version?.version ?? ''} (${version?.buildNumber ?? ''})'),
           subtitle: Text(meta == null
               ? ''
-              : 'Data: ${prettyDate(meta.lastMarketDate)} close · generated ${meta.generated}'),
+              : 'Data: ${prettyDate(meta.lastMarketDate)} close · updated ${istTime(meta.generated)}'),
         ),
-        const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Disclaimer()),
+        const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16), child: Disclaimer()),
       ]),
     );
   }

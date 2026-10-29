@@ -20,7 +20,10 @@ class BillingState {
   });
 
   BillingState copyWith(
-          {bool? available, bool? loading, List<ProductDetails>? products, String? error}) =>
+          {bool? available,
+          bool? loading,
+          List<ProductDetails>? products,
+          String? error}) =>
       BillingState(
         available: available ?? this.available,
         loading: loading ?? this.loading,
@@ -102,4 +105,5 @@ class BillingNotifier extends Notifier<BillingState> {
   }
 }
 
-final billingProvider = NotifierProvider<BillingNotifier, BillingState>(BillingNotifier.new);
+final billingProvider =
+    NotifierProvider<BillingNotifier, BillingState>(BillingNotifier.new);

@@ -17,7 +17,7 @@ jobs:
           echo "meta: $meta"
           last=$(echo "$meta" | python3 -c "import sys,json;print(json.load(sys.stdin)['last_market_date'])")
           age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
-          [ "$age" -le 5 ] || { echo "data is $age days old"; exit 1; }
+          [ "$age" -le 4 ] || { echo "data is $age days old"; exit 1; }
           curl -sf -m 30 -o /dev/null -w "summary %{time_total}s %{size_download}B\n" $cdn/summary.json
           curl -sf -m 120 -o /dev/null -w "api health %{time_total}s\n" https://nse-catalyst-scanner.onrender.com/api/health
       - name: Report

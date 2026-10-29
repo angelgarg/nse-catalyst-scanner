@@ -18,7 +18,8 @@ def test_analyze_stock_shapes_and_parity():
     assert s["last_date"] == s["dates"][-1]
     for e in ev:
         assert e["direction"] in ("Up", "Down")
-        assert abs(e["z"]) > core.Z_THRESHOLD and e["vr"] > core.VOL_RATIO_THRESHOLD
+        # z and vr are rounded to 2 dp in the output, so compare with >=
+        assert abs(e["z"]) >= core.Z_THRESHOLD and e["vr"] >= core.VOL_RATIO_THRESHOLD
 
 
 def test_sample_data_has_planted_catalysts():

@@ -11,10 +11,21 @@ class PaywallScreen extends ConsumerWidget {
   const PaywallScreen({super.key});
 
   static const _features = [
-    (Icons.all_inclusive, 'Unlimited watchlist', 'Track as many NSE stocks as you like'),
-    (Icons.notifications_active_outlined, 'Spike alerts', 'A notification when a watched stock spikes'),
-    (Icons.history, 'Full history', '2 years of spike days and 120-day spike feed'),
-    (Icons.insights_outlined, 'Model view', 'Expected move size and up-day tendency, with fit quality'),
+    (
+      Icons.all_inclusive,
+      'Unlimited watchlist',
+      'Track as many NSE stocks as you like (free: 5)'
+    ),
+    (
+      Icons.notifications_active_outlined,
+      'Evening spike alerts',
+      'A notification after market close when a stock you follow moves on its own'
+    ),
+    (
+      Icons.history,
+      '2 years of spike days',
+      'Free shows the last 30 days. Filings are matched for recent spikes only'
+    ),
   ];
 
   @override
@@ -26,11 +37,18 @@ class PaywallScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Spikewise Pro')),
       body: ListView(padding: const EdgeInsets.all(20), children: [
-        Text(pro ? 'You have Pro. Thank you!' : 'See every spike, the moment it happens.',
+        Text(
+            pro
+                ? 'You have Pro. Thank you!'
+                : 'Never miss a spike in the stocks you follow',
             style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 16),
         for (final f in _features)
-          ListTile(contentPadding: EdgeInsets.zero, leading: Icon(f.$1), title: Text(f.$2), subtitle: Text(f.$3)),
+          ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(f.$1),
+              title: Text(f.$2),
+              subtitle: Text(f.$3)),
         const SizedBox(height: 16),
         if (!pro) ...[
           if (billing.loading)
@@ -40,22 +58,37 @@ class PaywallScreen extends ConsumerWidget {
               child: ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text('Subscriptions are not available right now'),
-                subtitle: Text('Make sure Google Play is installed and you are signed in, then try again.'),
+                subtitle: Text(
+                    'Make sure Google Play is installed and you are signed in, then try again.'),
               ),
             )
           else
-            for (final p in billing.products)
+            // Yearly first: it's the better deal and the one most people should pick.
+            for (final p in [
+              ...billing.products
+            ]..sort((a, b) => b.rawPrice.compareTo(a.rawPrice)))
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _PlanButton(p: p, onTap: () => ref.read(billingProvider.notifier).buy(p)),
+                child: _PlanButton(
+                  p: p,
+                  monthly: billing.products
+                      .where((m) => m.id == kProMonthly)
+                      .firstOrNull,
+                  onTap: () => ref.read(billingProvider.notifier).buy(p),
+                ),
               ),
+          const Text(
+              'Pay through Google Play with UPI, card or Play balance. Cancel anytime.',
+              textAlign: TextAlign.center),
           if (billing.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(billing.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              child: Text(billing.error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           TextButton(
-            onPressed: () => ref.read(billingProvider.notifier).refreshEntitlement(),
+            onPressed: () =>
+                ref.read(billingProvider.notifier).refreshEntitlement(),
             child: const Text('Restore purchase'),
           ),
         ],
@@ -66,8 +99,11 @@ class PaywallScreen extends ConsumerWidget {
           style: tt.bodySmall,
         ),
         Row(children: [
-          TextButton(onPressed: () => openUrl(kTermsUrl), child: const Text('Terms')),
-          TextButton(onPressed: () => openUrl(kPrivacyUrl), child: const Text('Privacy')),
+          TextButton(
+              onPressed: () => openUrl(kTermsUrl), child: const Text('Terms')),
+          TextButton(
+              onPressed: () => openUrl(kPrivacyUrl),
+              child: const Text('Privacy')),
         ]),
       ]),
     );
@@ -76,23 +112,41 @@ class PaywallScreen extends ConsumerWidget {
 
 class _PlanButton extends StatelessWidget {
   final ProductDetails p;
+  final ProductDetails? monthly;
   final VoidCallback onTap;
-  const _PlanButton({required this.p, required this.onTap});
+  const _PlanButton({required this.p, required this.onTap, this.monthly});
 
   @override
   Widget build(BuildContext context) {
     final yearly = p.id == kProYearly;
+    final perMonth = (p.rawPrice / 12).round();
+    final saving = monthly == null || monthly!.rawPrice <= 0
+        ? null
+        : (100 * (1 - p.rawPrice / (monthly!.rawPrice * 12))).round();
+    final style = yearly
+        ? FilledButton.styleFrom(padding: const EdgeInsets.all(16))
+        : FilledButton.styleFrom(
+            padding: const EdgeInsets.all(16),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            foregroundColor:
+                Theme.of(context).colorScheme.onSecondaryContainer);
     return FilledButton(
-      style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
+      style: style,
       onPressed: onTap,
       child: Row(children: [
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(yearly ? 'Yearly' : 'Monthly', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            if (yearly) const Text('Best value'),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(yearly ? 'Yearly' : 'Monthly',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            if (yearly)
+              Text('${p.currencySymbol}$perMonth/month, billed yearly'
+                  '${saving != null && saving > 0 ? ' · save $saving%' : ''}'),
           ]),
         ),
-        Text('${p.price}${yearly ? '/yr' : '/mo'}', style: const TextStyle(fontSize: 16)),
+        Text('${p.price}${yearly ? '/yr' : '/mo'}',
+            style: const TextStyle(fontSize: 16)),
       ]),
     );
   }

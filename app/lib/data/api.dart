@@ -53,10 +53,11 @@ class Api {
     }
   }
 
-  Future<List<StockSummary>> summary() async => (await _cdn('summary.json') as List)
-      .whereType<Map<String, dynamic>>()
-      .map(StockSummary.fromJson)
-      .toList();
+  Future<List<StockSummary>> summary() async =>
+      (await _cdn('summary.json') as List)
+          .whereType<Map<String, dynamic>>()
+          .map(StockSummary.fromJson)
+          .toList();
 
   Future<List<SpikeEvent>> events() async => (await _cdn('events.json') as List)
       .whereType<Map<String, dynamic>>()
@@ -94,7 +95,8 @@ class Api {
   Future<void> sendFeedback(Map<String, dynamic> body) async {
     try {
       await _dio.post('$kApiUrl/api/v1/feedback',
-          data: body, options: Options(receiveTimeout: const Duration(seconds: 90)));
+          data: body,
+          options: Options(receiveTimeout: const Duration(seconds: 90)));
     } on DioException catch (e) {
       final err = e.response?.data;
       throw ApiException(err is Map && err['error'] is String

@@ -38,7 +38,7 @@ VOL_RATIO_THRESHOLD = 1.25
 SEED = 7
 
 USE_ANNOUNCEMENTS = _HAS_NSE or _HAS_BSE
-ANNOUNCE_LOOKBACK_DAYS = 7
+ANNOUNCE_LOOKBACK_DAYS = 3
 ANNOUNCE_FORWARD_DAYS = 1
 
 # ------------------------------------------------------------------ stock config
@@ -475,14 +475,17 @@ def compute_features(df, nifty_ret):
     d = df.copy().reset_index(drop=True)
     d["ret"] = d["Close"].pct_change()
     d["ma20"] = d["Close"].rolling(20).mean()
-    d["vavg20"] = d["Volume"].rolling(20).mean()
+    # Every baseline uses the 20 sessions BEFORE the day being scored (.shift(1)).
+    # Including the day itself let a big move inflate its own baseline, which
+    # capped |z| near 4.47 (= sqrt(20)) and understated volume spikes.
+    d["vavg20"] = d["Volume"].rolling(20).mean().shift(1)
     d["vr"] = d["Volume"] / d["vavg20"]
     d["nret"] = nifty_ret.reset_index(drop=True)
     cov = d["ret"].rolling(20).cov(d["nret"])
     var = d["nret"].rolling(20).var()
-    d["beta20"] = cov / var
+    d["beta20"] = (cov / var).shift(1)
     d["resid"] = d["ret"] - d["beta20"] * d["nret"]
-    d["rstd20"] = d["resid"].rolling(20).std()
+    d["rstd20"] = d["resid"].rolling(20).std().shift(1)
     d["z"] = d["resid"] / d["rstd20"]
     d["event"] = (d["z"].abs() > Z_THRESHOLD) & (d["vr"] > VOL_RATIO_THRESHOLD)
     # new signals
@@ -719,17 +722,80 @@ _scripcode_cache = {}
 _ann_cache = {}
 
 
+# Filing categories that are paperwork, never a reason for a price move.
+_BLOCKED_FILINGS = (
+    "trading window", "certificate under sebi", "newspaper", "link of recording",
+    "audio recording", "transcript", "investor meet", "con. call", "conference call",
+    "loss of share", "duplicate share", "share certificate", "registrar", "esop", "esos",
+    "closure of trading", "compliance certificate", "reg. 74", "regulation 74",
+)
+# Catch-all categories: shown only if nothing more specific exists, and flagged routine.
+_ROUTINE_FILINGS = ("updates", "general updates", "shareholders meeting", "agm", "egm",
+                    "change in director", "change in management", "appointment", "resignation")
+
+
+def filing_tier(category):
+    """0 = specific (results, orders, M&A, ...), 1 = routine catch-all, 2 = blocked."""
+    c = (category or "").strip().lower()
+    if any(b in c for b in _BLOCKED_FILINGS):
+        return 2
+    if c in _ROUTINE_FILINGS or any(c.startswith(r) for r in _ROUTINE_FILINGS[3:]):
+        return 1
+    return 0
+
+
+def _row_fields(row, exch):
+    if exch == "NSE":
+        category = row.get("desc")
+        text = row.get("attchmntText") or category
+        link = row.get("attchmntFile")
+    else:
+        category = (row.get("CATEGORYNAME") or row.get("ANNOUNCEMENT_TYPE")
+                    or row.get("SUBCATNAME"))
+        text = (row.get("HEADLINE") or row.get("NEWSSUB") or row.get("News_sub") or category)
+        fname = row.get("ATTACHMENTNAME") or row.get("Attachmentname")
+        link = (f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{fname}"
+                if fname else row.get("NSURL"))
+    if text:
+        text = " ".join(str(text).split())
+    return category, text, link
+
+
+def pick_announcement(rows, ev_ts, exch):
+    """Choose the filing to show for a spike on ev_ts: the most specific category
+    first (blocked paperwork never), then the nearest in time. Returns
+    (category, text, exchange, link, filed_date, routine) or None."""
+    best_key, best = None, None
+    for row in rows:
+        raw_dt = (row.get("sort_date") or row.get("an_dt") or row.get("NEWS_DT")
+                  or row.get("News_dt") or row.get("DissemDT") or row.get("dt"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            ann_ts = pd.to_datetime(raw_dt, errors="coerce", dayfirst=True)
+        if pd.isna(ann_ts):
+            continue
+        category, text, link = _row_fields(row, exch)
+        tier = filing_tier(category)
+        if tier == 2 or not text:
+            continue
+        key = (tier, abs((ev_ts - ann_ts).total_seconds()))
+        if best_key is None or key < best_key:
+            best_key = key
+            best = (category, text, exch, link, ann_ts.strftime("%Y-%m-%d"), tier == 1)
+    return best
+
+
 def fetch_announcement_for_event(symbol, event_date):
     """Looks up the official NSE (primary) or BSE (fallback) corporate announcement
-    nearest a flagged catalyst date. Returns (category, announcement, exchange, link);
-    all None if unavailable or nothing falls in the date window."""
+    nearest a flagged catalyst date. Returns (category, announcement, exchange, link,
+    filed_date, routine); all None if unavailable or nothing relevant is in the window."""
     if not USE_ANNOUNCEMENTS:
-        return None, None, None, None
+        return (None,) * 6
     key = (symbol, str(event_date))
     if key in _ann_cache:
         return _ann_cache[key]
 
-    result = (None, None, None, None)
+    result = (None,) * 6
     try:
         ev_ts = pd.Timestamp(event_date)
         d_from = (ev_ts - pd.Timedelta(days=ANNOUNCE_LOOKBACK_DAYS)).to_pydatetime()
@@ -758,34 +824,9 @@ def fetch_announcement_for_event(symbol, event_date):
                     rows = None
 
         if rows:
-            best, best_gap = None, None
-            for row in rows:
-                raw_dt = (row.get("sort_date") or row.get("an_dt") or row.get("NEWS_DT")
-                          or row.get("News_dt") or row.get("DissemDT") or row.get("dt"))
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", UserWarning)
-                    ann_ts = pd.to_datetime(raw_dt, errors="coerce", dayfirst=True)
-                if pd.isna(ann_ts):
-                    continue
-                gap = abs((ev_ts - ann_ts).total_seconds())
-                if best_gap is None or gap < best_gap:
-                    best, best_gap = row, gap
-
-            if best is not None:
-                if exch == "NSE":
-                    category = best.get("desc")
-                    text = best.get("attchmntText") or category
-                    link = best.get("attchmntFile")
-                else:
-                    category = (best.get("CATEGORYNAME") or best.get("ANNOUNCEMENT_TYPE")
-                                or best.get("SUBCATNAME"))
-                    text = (best.get("HEADLINE") or best.get("NEWSSUB")
-                            or best.get("News_sub") or category)
-                    fname = best.get("ATTACHMENTNAME") or best.get("Attachmentname")
-                    link = (f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{fname}"
-                            if fname else best.get("NSURL"))
-                if text:
-                    result = (category, text, exch, link)
+            picked = pick_announcement(rows, ev_ts, exch)
+            if picked:
+                result = picked
     except Exception:
         pass
 
@@ -895,8 +936,8 @@ def analyze_stock(tic, name, df, nifty_ret, with_news=True, with_announcements=T
 
     ann_since:  only query exchange announcements for events on/after this date
                 (older events keep whatever ann_lookup returns).
-    ann_lookup: callable(ticker, date_str) -> (category, text, exchange, link) or None,
-                used to reuse previously fetched announcements.
+    ann_lookup: callable(ticker, date_str) -> announcement tuple (see
+                fetch_announcement_for_event) or None, to reuse earlier lookups.
     """
     import math
     d = compute_features(df, nifty_ret)
@@ -940,18 +981,25 @@ def analyze_stock(tic, name, df, nifty_ret, with_news=True, with_announcements=T
     }
 
     events = []
+    used_links = set()
     since = pd.Timestamp(ann_since) if ann_since is not None else None
     for _, row in d.loc[ev_mask].iterrows():
         date_s = row["Date"].strftime("%Y-%m-%d")
         ann = ann_lookup(tic, date_s) if ann_lookup else None
         if ann is None and with_announcements and (since is None or row["Date"] >= since):
             ann = fetch_announcement_for_event(tic, row["Date"])
-        category, announcement, exchange, link = ann or (None, None, None, None)
+        category, announcement, exchange, link, filed, routine = \
+            (tuple(ann or ()) + (None,) * 6)[:6]
+        # One filing explains at most one spike (the first one on/after it).
+        if link and link in used_links:
+            category = announcement = exchange = link = filed = routine = None
+        elif link:
+            used_links.add(link)
         events.append({
             "date": date_s, "ticker": tic, "name": name,
             "ret": _fnum(row["ret"], 4), "z": _fnum(row["z"], 2), "vr": _fnum(row["vr"], 2),
             "direction": "Up" if row["ret"] >= 0 else "Down",
             "category": category, "announcement": announcement,
-            "exchange": exchange, "link": link,
+            "exchange": exchange, "link": link, "filed": filed, "routine": bool(routine),
         })
     return stock, events

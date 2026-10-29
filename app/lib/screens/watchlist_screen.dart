@@ -29,7 +29,8 @@ class WatchlistScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Spikewise', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Spikewise',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           if (!pro)
             TextButton.icon(
@@ -39,7 +40,9 @@ class WatchlistScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-          onPressed: onAdd, icon: const Icon(Icons.add), label: const Text('Add stock')),
+          onPressed: onAdd,
+          icon: const Icon(Icons.add),
+          label: const Text('Add stock')),
       body: summary.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorRetry(error: e, onRetry: () => _refresh(ref)),
@@ -49,17 +52,22 @@ class WatchlistScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
             children: [
               if (cfg?.notice != null)
-                Card(child: ListTile(leading: const Icon(Icons.campaign_outlined), title: Text(cfg!.notice!))),
+                Card(
+                    child: ListTile(
+                        leading: const Icon(Icons.campaign_outlined),
+                        title: Text(cfg!.notice!))),
               if (meta != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('Closing data for ${prettyDate(meta.lastMarketDate)} · ${meta.stocks} NSE stocks scanned',
+                  child: Text(
+                      'Closing prices for ${prettyDate(meta.lastMarketDate)} · updated ${istTime(meta.generated)}',
                       style: Theme.of(context).textTheme.bodySmall),
                 ),
               if (watch.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text('Your watchlist is empty. Add stocks to see when they move on their own news.',
+                  child: Text(
+                      'No stocks yet. Add the stocks you own and we\'ll show you when one moves on its own.',
                       textAlign: TextAlign.center),
                 ),
               for (final t in watch)
@@ -78,7 +86,9 @@ class WatchlistScreen extends ConsumerWidget {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text('Removed $t'),
                         action: SnackBarAction(
-                            label: 'Undo', onPressed: () => ref.read(watchlistProvider.notifier).add(t)),
+                            label: 'Undo',
+                            onPressed: () =>
+                                ref.read(watchlistProvider.notifier).add(t)),
                       ));
                     },
                     child: byTicker[t] != null
@@ -86,7 +96,8 @@ class WatchlistScreen extends ConsumerWidget {
                         : Card(
                             child: ListTile(
                               title: Text(t),
-                              subtitle: const Text('Not in the daily scan · tap to analyse now'),
+                              subtitle: const Text(
+                                  'Not in the daily scan · tap to analyse now'),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => openStock(context, t),
                             ),
@@ -94,7 +105,9 @@ class WatchlistScreen extends ConsumerWidget {
                   ),
                 ),
               if (!pro && cfg != null && watch.length >= cfg.freeWatchlistLimit)
-                ProLock(label: 'Track more than ${cfg.freeWatchlistLimit} stocks', child: const SizedBox()),
+                ProLock(
+                    label: 'Track more than ${cfg.freeWatchlistLimit} stocks',
+                    child: const SizedBox()),
               const Disclaimer(),
             ],
           ),

@@ -114,7 +114,7 @@ def build(stock_override=None):
         })
 
         for _, row in d.loc[d["event"].fillna(False)].iterrows():
-            category, announcement, exchange, link = core.fetch_announcement_for_event(tic, row["Date"])
+            category, announcement, exchange, link = core.fetch_announcement_for_event(tic, row["Date"])[:4]
             all_events.append({
                 "date": row["Date"].strftime("%Y-%m-%d"), "ticker": tic, "name": name,
                 "ret": fnum(row["ret"], 4), "z": fnum(row["z"], 2), "vr": fnum(row["vr"], 2),

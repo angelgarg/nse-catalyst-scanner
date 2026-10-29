@@ -15,7 +15,7 @@ class FeedScreen extends ConsumerStatefulWidget {
 class _FeedScreenState extends ConsumerState<FeedScreen> {
   bool _watchOnly = false;
   bool? _up; // null = both
-  bool _filedOnly = false;
+  bool _filedOnly = true; // spikes with a company filing are the useful ones
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +29,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       appBar: AppBar(title: const Text('Spike feed')),
       body: events.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorRetry(error: e, onRetry: () => ref.invalidate(eventsProvider)),
+        error: (e, _) =>
+            ErrorRetry(error: e, onRetry: () => ref.invalidate(eventsProvider)),
         data: (all) {
           var cutoff = '';
           final last = DateTime.tryParse(meta?.lastMarketDate ?? '');
@@ -45,7 +46,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               .where((e) => _up == null || e.up == _up)
               .where((e) => !_filedOnly || e.announcement != null)
               .toList();
-          final hidden = all.length - all.where((e) => e.date.compareTo(cutoff) >= 0).length;
+          final hidden = all.length -
+              all.where((e) => e.date.compareTo(cutoff) >= 0).length;
           return RefreshIndicator(
             onRefresh: () => ref.refresh(eventsProvider.future),
             child: ListView.builder(
@@ -54,22 +56,38 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               itemBuilder: (context, i) {
                 if (i == 0) {
                   return Wrap(spacing: 8, children: [
-                    FilterChip(label: const Text('My watchlist'), selected: _watchOnly,
+                    FilterChip(
+                        label: const Text('My stocks'),
+                        selected: _watchOnly,
                         onSelected: (v) => setState(() => _watchOnly = v)),
-                    FilterChip(label: const Text('Up'), selected: _up == true,
-                        onSelected: (v) => setState(() => _up = v ? true : null)),
-                    FilterChip(label: const Text('Down'), selected: _up == false,
-                        onSelected: (v) => setState(() => _up = v ? false : null)),
-                    FilterChip(label: const Text('With filing'), selected: _filedOnly,
+                    FilterChip(
+                        label: const Text('Up'),
+                        selected: _up == true,
+                        onSelected: (v) =>
+                            setState(() => _up = v ? true : null)),
+                    FilterChip(
+                        label: const Text('Down'),
+                        selected: _up == false,
+                        onSelected: (v) =>
+                            setState(() => _up = v ? false : null)),
+                    FilterChip(
+                        label: const Text('Has filing'),
+                        selected: _filedOnly,
                         onSelected: (v) => setState(() => _filedOnly = v)),
                   ]);
                 }
                 if (i == list.length + 1) {
                   return Column(children: [
                     if (list.isEmpty)
-                      const Padding(padding: EdgeInsets.all(32), child: Text('No spikes match these filters.')),
+                      const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text(
+                              'No spikes match these filters. Try turning one off.',
+                              textAlign: TextAlign.center)),
                     if (!pro && hidden > 0)
-                      ProLock(label: '$hidden older spikes (up to 120 days)', child: const SizedBox()),
+                      ProLock(
+                          label: '$hidden more spikes from the last 120 days',
+                          child: const SizedBox()),
                     const Disclaimer(),
                   ]);
                 }
