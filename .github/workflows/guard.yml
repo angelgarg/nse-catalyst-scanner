@@ -1,0 +1,41 @@
+# Required check. PRs touching paths in .github/CODEOWNERS need an approving review from
+# the repo owner; everything else passes straight through so agents can auto-merge it.
+name: guard
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.event.pull_request.base.sha }}"}   # rules come from main, not the PR
+      - name: Check sensitive paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          OWNER: angelgarg
+        run: |
+          set -euo pipefail
+          patterns=$(grep -v '^\s*#' .github/CODEOWNERS | awk 'NF{print $1}' | sed 's#^/##')
+          files=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json files -q '.files[].path')
+          hits=""
+          for f in $files; do
+            for p in $patterns; do
+              case "$p" in
+                */) [[ "$f" == "$p"* ]] && hits="$hits $f" ;;
+                *)  [[ "$f" == "$p" ]] && hits="$hits $f" ;;
+              esac
+            done
+          done
+          if [ -z "$hits" ]; then echo "No sensitive paths changed."; exit 0; fi
+          echo "Sensitive paths changed:$hits"
+          approved=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" \
+            -q "[.[] | select(.user.login==\"$OWNER\" and .state==\"APPROVED\")] | length")
+          if [ "$approved" -gt 0 ]; then echo "Approved by $OWNER."; exit 0; fi
+          echo "::error::Needs an approving review from @$OWNER (sensitive paths:$hits)"
+          exit 1

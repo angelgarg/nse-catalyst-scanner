@@ -45,6 +45,9 @@ def _headers(resp):
 # ------------------------------------------------------------------ helpers
 
 _cache, _cache_lock = {}, threading.Lock()
+CACHE_MAX = 400
+HITS_MAX = 20000
+_analyze_slots = threading.BoundedSemaphore(2)  # on-demand analyses at once
 
 
 def _cached(key, ttl, fn):
@@ -56,6 +59,8 @@ def _cached(key, ttl, fn):
     val = fn()
     with _cache_lock:
         _cache[key] = (now, val)
+        while len(_cache) > CACHE_MAX:
+            _cache.pop(next(iter(_cache)))
     return val
 
 
@@ -71,9 +76,16 @@ def cdn(path, ttl=600):
 _hits = defaultdict(deque)
 
 
+def client_ip():
+    # Render sits behind Cloudflare, which sets CF-Connecting-IP itself. The first
+    # X-Forwarded-For entry is client-controlled, so it is never trusted.
+    return request.headers.get("CF-Connecting-IP") or request.remote_addr or "?"
+
+
 def rate_limited(bucket, limit, window):
-    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "?").split(",")[0]
-    q, now = _hits[(bucket, ip)], time.time()
+    if len(_hits) > HITS_MAX:
+        _hits.clear()
+    q, now = _hits[(bucket, client_ip())], time.time()
     while q and now - q[0] > window:
         q.popleft()
     if len(q) >= limit:
@@ -137,6 +149,7 @@ def _analyze(ticker):
     s, ev = core.analyze_stock(ticker, name, df, nret, with_news=True,
                                with_announcements=core.USE_ANNOUNCEMENTS,
                                ann_since=datetime.date.today() - datetime.timedelta(days=30))
+    s = {k: v for k, v in s.items() if not k.startswith("pred_")}
     s["events"] = sorted(ev, key=lambda e: e["date"], reverse=True)
     s["on_demand"] = True
     return s
@@ -147,17 +160,27 @@ def api_analyze(ticker):
     t = _clean_ticker(ticker)
     if not t:
         return jsonify({"error": "invalid ticker"}), 400
-    key = "analyze:" + t
+    key, miss_key = "analyze:" + t, "miss:" + t
     with _cache_lock:
         fresh = key in _cache and time.time() - _cache[key][0] < 6 * 3600
+        miss = _cache.get(miss_key)
+    if miss and time.time() - miss[0] < 24 * 3600:
+        return jsonify({"error": miss[1]}), 404
     if not fresh and rate_limited("analyze", 20, 3600):
         return jsonify({"error": "Too many requests, try again later."}), 429
+    if not fresh and not _analyze_slots.acquire(blocking=False):
+        return jsonify({"error": "Server is busy, try again in a minute."}), 503
     try:
         data = _cached(key, 6 * 3600, lambda: _analyze(t))
     except LookupError as err:
+        _cached(miss_key, 0, lambda: str(err))
         return jsonify({"error": str(err)}), 404
-    except Exception as err:
-        return jsonify({"error": f"analysis failed: {str(err)[:200]}"}), 502
+    except Exception:
+        app.logger.exception("analyze %s failed", t)
+        return jsonify({"error": "Analysis failed, try again later."}), 502
+    finally:
+        if not fresh:
+            _analyze_slots.release()
     resp = jsonify(data)
     resp.headers["Cache-Control"] = "public, max-age=3600"
     return resp
@@ -246,8 +269,8 @@ def api_stock_detail(ticker):
         return jsonify(cdn(f"stocks/{t.replace('&', '_')}.json", 1800))
     except requests.HTTPError:
         return jsonify({"error": f"{t} not found"}), 404
-    except Exception as err:
-        return jsonify({"error": str(err)[:200]}), 502
+    except Exception:
+        return jsonify({"error": "data temporarily unavailable"}), 502
 
 
 @app.route("/api/search")

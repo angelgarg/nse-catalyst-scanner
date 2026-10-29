@@ -26,7 +26,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (res == AddResult.limit) {
       openPaywall(context);
     } else if (res == AddResult.added) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $ticker to watchlist')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Added $ticker to watchlist')));
     }
   }
 
@@ -56,34 +57,43 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         Expanded(
           child: uni.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => ErrorRetry(error: e, onRetry: () => ref.invalidate(universeProvider)),
+            error: (e, _) => ErrorRetry(
+                error: e, onRetry: () => ref.invalidate(universeProvider)),
             data: (all) {
               final hits = q.isEmpty
                   ? all
                   : all
-                      .where((u) => u.ticker.toLowerCase().contains(q) || u.name.toLowerCase().contains(q))
+                      .where((u) =>
+                          u.ticker.toLowerCase().contains(q) ||
+                          u.name.toLowerCase().contains(q))
                       .toList();
               final exact = all.any((u) => u.ticker == raw);
               return ListView.builder(
                 itemCount: hits.length + 1,
                 itemBuilder: (context, i) {
                   if (i == hits.length) {
-                    if (raw.length < 2 || exact) return const SizedBox(height: 24);
+                    // Only offer on-demand analysis when nothing matched.
+                    if (raw.length < 3 || exact || hits.isNotEmpty) {
+                      return const SizedBox(height: 24);
+                    }
                     return ListTile(
                       leading: const Icon(Icons.travel_explore),
                       title: Text('Analyse "$raw" now'),
-                      subtitle: const Text('Not in the daily scan. Takes up to a minute.'),
+                      subtitle: const Text(
+                          'Not in the daily scan. Takes up to a minute.'),
                       onTap: () => openStock(context, raw),
                     );
                   }
                   final u = hits[i];
                   final inList = watch.contains(u.ticker);
                   return ListTile(
-                    title: Text(u.ticker, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    title: Text(u.ticker,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(u.name),
                     onTap: () => openStock(context, u.ticker),
                     trailing: IconButton(
-                      tooltip: inList ? 'Remove from watchlist' : 'Add to watchlist',
+                      tooltip:
+                          inList ? 'Remove from watchlist' : 'Add to watchlist',
                       icon: Icon(inList ? Icons.star : Icons.star_outline),
                       onPressed: () => _toggle(u.ticker),
                     ),

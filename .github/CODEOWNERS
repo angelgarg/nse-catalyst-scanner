@@ -1,0 +1,20 @@
+# Changes to these paths need @angelgarg's approval (enforced by the `guard` check).
+# Agents may auto-merge everything else (tests, docs, app screens/widgets) once CI is green.
+/app_config.json        @angelgarg
+/web/                   @angelgarg
+/.github/               @angelgarg
+/AGENTS.md              @angelgarg
+/CLAUDE.md              @angelgarg
+/render.yaml            @angelgarg
+/requirements.txt       @angelgarg
+/gunicorn.conf.py       @angelgarg
+/Procfile               @angelgarg
+/runtime.txt            @angelgarg
+/catalyst_core.py       @angelgarg
+/pipeline.py            @angelgarg
+/flask_app.py           @angelgarg
+/nse_universe.json      @angelgarg
+/app/android/           @angelgarg
+/app/pubspec.yaml       @angelgarg
+/app/lib/config.dart    @angelgarg
+/app/lib/services/billing.dart @angelgarg

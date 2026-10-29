@@ -63,3 +63,25 @@ def test_cors_header(client):
 def test_removed_mutating_routes(client):
     for path in ("/add", "/remove", "/rebuild", "/manage"):
         assert client.post(path).status_code in (404, 405)
+
+
+def test_rate_limit_ignores_spoofed_forwarded_for(client):
+    for i in range(5):
+        client.post("/api/v1/feedback", json={"message": "hello there"},
+                    headers={"X-Forwarded-For": f"10.0.0.{i}"})
+    r = client.post("/api/v1/feedback", json={"message": "hello there"},
+                    headers={"X-Forwarded-For": "10.9.9.9"})
+    assert r.status_code == 429
+
+
+def test_unknown_ticker_is_negative_cached(client, monkeypatch):
+    calls = []
+
+    def boom(t):
+        calls.append(t)
+        raise LookupError("No price data found")
+    monkeypatch.setattr(flask_app, "_analyze", boom)
+    flask_app._cache.clear()
+    assert client.get("/api/v1/analyze/ZZZQQ").status_code == 404
+    assert client.get("/api/v1/analyze/ZZZQQ").status_code == 404
+    assert calls == ["ZZZQQ"]

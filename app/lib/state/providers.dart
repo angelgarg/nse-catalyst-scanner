@@ -6,19 +6,21 @@ import '../data/api.dart';
 import '../data/models.dart';
 
 /// Overridden in main() once SharedPreferences has loaded.
-final prefsProvider = Provider<SharedPreferences>((_) => throw UnimplementedError());
+final prefsProvider =
+    Provider<SharedPreferences>((_) => throw UnimplementedError());
 
 final apiProvider = Provider<Api>((ref) => Api(ref.watch(prefsProvider)));
 
-final metaProvider = FutureProvider<DataMeta>((ref) => ref.watch(apiProvider).meta());
+final metaProvider =
+    FutureProvider<DataMeta>((ref) => ref.watch(apiProvider).meta());
 final configProvider =
     FutureProvider<RemoteConfig>((ref) => ref.watch(apiProvider).config());
-final summaryProvider =
-    FutureProvider<List<StockSummary>>((ref) => ref.watch(apiProvider).summary());
+final summaryProvider = FutureProvider<List<StockSummary>>(
+    (ref) => ref.watch(apiProvider).summary());
 final eventsProvider =
     FutureProvider<List<SpikeEvent>>((ref) => ref.watch(apiProvider).events());
-final universeProvider =
-    FutureProvider<List<UniverseEntry>>((ref) => ref.watch(apiProvider).universe());
+final universeProvider = FutureProvider<List<UniverseEntry>>(
+    (ref) => ref.watch(apiProvider).universe());
 final detailProvider = FutureProvider.autoDispose.family<StockDetail, String>(
     (ref, ticker) => ref.watch(apiProvider).detail(ticker));
 
@@ -56,9 +58,11 @@ class WatchlistNotifier extends Notifier<List<String>> {
 
   @override
   List<String> build() =>
-      ref.watch(prefsProvider).getStringList(_key) ?? List.of(kDefaultWatchlist);
+      ref.watch(prefsProvider).getStringList(_key) ??
+      List.of(kDefaultWatchlist);
 
-  int get limit => ref.read(proProvider) ? 1 << 30 : currentConfig(ref).freeWatchlistLimit;
+  int get limit =>
+      ref.read(proProvider) ? 1 << 30 : currentConfig(ref).freeWatchlistLimit;
 
   Future<AddResult> add(String ticker) async {
     if (state.contains(ticker)) return AddResult.already;
@@ -97,7 +101,8 @@ class BoolPref extends FamilyNotifier<bool, String> {
   }
 }
 
-final boolPrefProvider = NotifierProvider.family<BoolPref, bool, String>(BoolPref.new);
+final boolPrefProvider =
+    NotifierProvider.family<BoolPref, bool, String>(BoolPref.new);
 
 const kOnboardedKey = 'onboarded_v1';
 const kAlertsKey = 'alerts_on';

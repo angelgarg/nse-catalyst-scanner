@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../state/providers.dart';
+import '../widgets/common.dart';
 
 class FeedbackScreen extends ConsumerStatefulWidget {
   final String? screen;
@@ -15,7 +16,6 @@ class FeedbackScreen extends ConsumerStatefulWidget {
 
 class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   final _msg = TextEditingController();
-  final _email = TextEditingController();
   String _kind = 'idea';
   int _rating = 0;
   bool _sending = false;
@@ -23,7 +23,6 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   @override
   void dispose() {
     _msg.dispose();
-    _email.dispose();
     super.dispose();
   }
 
@@ -36,20 +35,19 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
         'message': _msg.text.trim(),
         'kind': _kind,
         if (_rating > 0) 'rating': _rating,
-        'email': _email.text.trim(),
         'app_build': '${info.version}+${info.buildNumber}',
         'platform': 'android',
         'screen': widget.screen ?? 'more',
         'ticker': widget.ticker ?? '',
-        'pro': ref.read(proProvider),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Thanks! Your feedback was sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thanks! Your feedback was sent.')));
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
       setState(() => _sending = false);
     }
   }
@@ -87,16 +85,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           ),
           onChanged: (_) => setState(() {}),
         ),
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'Email (optional, only to reply to you)',
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text('Please don\'t include passwords, bank or trading account details.',
+        Text(
+            'Feedback is posted publicly in our GitHub project so it can be fixed. Don\'t include '
+            'your name, email, phone, or any bank or trading account details.',
             style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 16),
         FilledButton(

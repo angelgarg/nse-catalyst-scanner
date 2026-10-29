@@ -47,6 +47,12 @@ NEWS_RECENT_DAYS = 10         # fetch headlines for stocks with an event this re
 NEWS_MAX = 150
 MIN_OK_FRACTION = 0.8
 MAX_STALE_DAYS = 6
+STOCK_STALE_DAYS = 6          # drop stocks (suspended/delisted) this far behind NIFTY
+ANN_CACHE_VERSION = "v2"      # bump when filing selection rules change
+IST = timezone(timedelta(hours=5, minutes=30))
+CLOSE_SETTLED_IST = (16, 15)  # before this, today's Yahoo bar is still intraday
+# Model outputs are in-sample with very low fit; they are not published.
+PRIVATE_FIELDS = ("pred_move", "pred_dir", "pred_r2", "pred_n")
 
 
 def file_key(ticker):
@@ -80,11 +86,30 @@ def light_row(s):
         "ann_vol": s["ann_vol"], "beta": s["beta"],
         "cat_count": s["cat_count"], "last_cat_date": s["last_cat_date"],
         "z_last": s["z_last"], "vr_last": s["vr_last"],
-        "pred_move": s["pred_move"], "pred_dir": s["pred_dir"],
         "rsi": s["rsi"], "mom5": s["mom5"],
-        "sentiment": s["sentiment"]["label"],
         "spark": s["close"][-30:],
     }
+
+
+def drop_partial_session(frames, nifty, now=None):
+    """Remove today's bar while the session is still open or settling, so
+    intraday prices are never published (or alerted on) as closes."""
+    now = (now or datetime.now(timezone.utc)).astimezone(IST)
+    if (now.hour, now.minute) >= CLOSE_SETTLED_IST:
+        return frames, nifty
+    today = pd.Timestamp(now.date())
+    nifty = nifty[nifty["Date"] < today].reset_index(drop=True)
+    frames = {t: f[f["Date"] < today].reset_index(drop=True) for t, f in frames.items()}
+    return frames, nifty
+
+
+def public_detail(s, ev):
+    out = {k: v for k, v in s.items() if k not in PRIVATE_FIELDS}
+    # Keyword "bullish/bearish" tone reads like a view on the stock: publish headlines only.
+    out["sentiment"] = {"headlines": s["sentiment"].get("headlines", []),
+                        "count": s["sentiment"].get("count", 0)}
+    out["events"] = sorted(ev, key=lambda e: e["date"], reverse=True)
+    return out
 
 
 def run(out_dir, limit=None, prev_url=None):
@@ -97,13 +122,23 @@ def run(out_dir, limit=None, prev_url=None):
 
     frames, nifty, failed = core.fetch_prices_batch(list(names))
     print(f"[pipeline] prices: {len(frames)}/{len(names)} in {time.time() - t0:.0f}s")
+    frames, nifty = drop_partial_session(frames, nifty)
+    last_mkt_ts = nifty["Date"].max()
+    stale = []
+    for tic in list(frames):
+        if frames[tic].empty or (last_mkt_ts - frames[tic]["Date"].max()).days > STOCK_STALE_DAYS:
+            stale.append(tic)
+            del frames[tic]
+    if stale:
+        print(f"[pipeline] dropped {len(stale)} stale stocks: {stale[:20]}")
 
-    ann_cache = load_prev_ann_cache(prev_url)
+    ann_cache = {k: v for k, v in load_prev_ann_cache(prev_url).items()
+                 if k.startswith(ANN_CACHE_VERSION + "|")}
     ann_since = pd.Timestamp(date.today() - timedelta(days=ANN_RECENT_DAYS))
     ann_deadline = time.time() + ANN_BUDGET_SECS
 
     def ann_lookup(tic, date_s):
-        hit = ann_cache.get(f"{tic}|{date_s}")
+        hit = ann_cache.get(f"{ANN_CACHE_VERSION}|{tic}|{date_s}")
         if hit is not None:
             return tuple(hit)
         if time.time() > ann_deadline:
@@ -125,8 +160,9 @@ def run(out_dir, limit=None, prev_url=None):
             continue
         for e in ev:
             if e["announcement"] or pd.Timestamp(e["date"]) < ann_since:
-                ann_cache[f"{tic}|{e['date']}"] = [e["category"], e["announcement"],
-                                                  e["exchange"], e["link"]]
+                ann_cache[f"{ANN_CACHE_VERSION}|{tic}|{e['date']}"] = [
+                    e["category"], e["announcement"], e["exchange"], e["link"],
+                    e["filed"], e["routine"]]
         stocks[tic] = (s, ev)
         events.extend(ev)
     print(f"[pipeline] analysed {len(stocks)} stocks, {len(events)} events "
@@ -144,22 +180,20 @@ def run(out_dir, limit=None, prev_url=None):
 
     # ---- quality gate ----
     last_mkt = nifty["Date"].max().date()
-    ok_frac = len(stocks) / max(1, len(names))
-    stale = (date.today() - last_mkt).days
+    ok_frac = len(stocks) / max(1, len(names) - len(stale))
+    nifty_age = (date.today() - last_mkt).days
     problems = []
     if ok_frac < MIN_OK_FRACTION:
         problems.append(f"only {ok_frac:.0%} of stocks analysed")
-    if stale > MAX_STALE_DAYS:
-        problems.append(f"NIFTY data is {stale} days old ({last_mkt})")
+    if nifty_age > MAX_STALE_DAYS:
+        problems.append(f"NIFTY data is {nifty_age} days old ({last_mkt})")
     if problems:
         print("[pipeline] QUALITY GATE FAILED: " + "; ".join(problems))
         return 1
 
     # ---- write ----
     for tic, (s, ev) in stocks.items():
-        detail = dict(s)
-        detail["events"] = sorted(ev, key=lambda e: e["date"], reverse=True)
-        _dump(os.path.join(data_dir, "stocks", file_key(tic) + ".json"), detail)
+        _dump(os.path.join(data_dir, "stocks", file_key(tic) + ".json"), public_detail(s, ev))
 
     summary = sorted((light_row(s) for s, _ in stocks.values()), key=lambda r: r["ticker"])
     _dump(os.path.join(data_dir, "summary.json"), summary)
@@ -181,7 +215,7 @@ def run(out_dir, limit=None, prev_url=None):
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "last_market_date": last_mkt.isoformat(),
         "stocks": len(stocks), "universe": len(names),
-        "failed": sorted(set(failed)), "events_feed": len(feed),
+        "failed": sorted(set(failed)), "stale": sorted(stale), "events_feed": len(feed),
         "announcements_matched": sum(1 for e in events if e["announcement"]),
         "z_threshold": core.Z_THRESHOLD, "vol_threshold": core.VOL_RATIO_THRESHOLD,
         "build_secs": round(time.time() - t0, 1),

@@ -11,48 +11,68 @@ void openStock(BuildContext context, String ticker) => Navigator.of(context)
 
 class StockTile extends StatelessWidget {
   final StockSummary s;
-  final Widget? trailing;
-  const StockTile({super.key, required this.s, this.trailing});
+  const StockTile({super.key, required this.s});
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final c = signColor(context, s.chg1d);
+    final status = s.spikedToday
+        ? '${moveSize(s.zLast)} on its own · ${volumeText(s.vrLast)}'
+        : 'Moved with the market today';
     return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => openStock(context, s.ticker),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Text(s.ticker, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  if (s.spikedToday) ...[const SizedBox(width: 8), const SpikeBadge()],
-                ]),
-                Text(s.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: Semantics(
+        label:
+            '${s.ticker}, ${s.name}, ${inr(s.lastClose)}, ${pct(s.chg1d, digits: 2)} today'
+            '${s.spikedToday ? ', spiked today' : ''}',
+        excludeSemantics: true,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => openStock(context, s.ticker),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s.ticker,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(s.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodySmall?.copyWith(color: muted)),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        if (s.spikedToday) ...[
+                          const SpikeBadge(),
+                          const SizedBox(width: 6)
+                        ],
+                        Flexible(
+                          child: Text(status,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.bodySmall?.copyWith(
+                                  color: s.spikedToday ? null : muted)),
+                        ),
+                      ]),
+                    ]),
+              ),
+              ExcludeSemantics(child: Sparkline(values: s.spark, color: c)),
+              const SizedBox(width: 12),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(inr(s.lastClose),
+                    style: tt.titleSmall?.copyWith(fontFeatures: tabular)),
+                Text(pct(s.chg1d, digits: 2),
                     style: tt.bodySmall
-                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                Text(
-                  s.lastCatDate == null
-                      ? 'No spikes in 2 years'
-                      : '${s.catCount} spikes · last ${prettyDate(s.lastCatDate)}',
-                  style: tt.bodySmall,
-                ),
+                        ?.copyWith(color: c, fontFeatures: tabular)),
               ]),
-            ),
-            Sparkline(values: s.spark, color: c),
-            const SizedBox(width: 12),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(inr(s.lastClose), style: tt.titleSmall),
-              Text(pct(s.chg1d, digits: 2), style: tt.bodySmall?.copyWith(color: c)),
             ]),
-            if (trailing != null) trailing!,
-          ]),
+          ),
         ),
       ),
     );
@@ -64,10 +84,18 @@ class SpikeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(color: kBrand, borderRadius: BorderRadius.circular(6)),
-        child: const Text('SPIKE TODAY',
-            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+            color: kSpike, borderRadius: BorderRadius.circular(6)),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.bolt, size: 12, color: kOnSpike),
+          Text('SPIKE',
+              style: TextStyle(
+                  color: kOnSpike,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5)),
+        ]),
       );
 }
 
@@ -75,39 +103,70 @@ class EventTile extends StatelessWidget {
   final SpikeEvent e;
   final bool showTicker;
   final void Function(String url)? onOpenLink;
-  const EventTile({super.key, required this.e, this.showTicker = true, this.onOpenLink});
+  const EventTile(
+      {super.key, required this.e, this.showTicker = true, this.onOpenLink});
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final c = e.up ? kUp : kDown;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final c = e.up ? upColor(context) : downColor(context);
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: showTicker ? () => openStock(context, e.ticker) : null,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(prettyDate(e.date),
+                style: tt.labelSmall?.copyWith(color: muted)),
+            const SizedBox(height: 2),
             Row(children: [
-              Icon(e.up ? Icons.trending_up : Icons.trending_down, color: c, size: 20),
-              const SizedBox(width: 8),
-              if (showTicker)
-                Text(e.ticker, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-              if (showTicker) const SizedBox(width: 8),
+              Icon(e.up ? Icons.arrow_upward : Icons.arrow_downward,
+                  color: c, size: 18, semanticLabel: e.up ? 'Up' : 'Down'),
+              const SizedBox(width: 6),
+              if (showTicker) ...[
+                Flexible(
+                  child: Text(e.ticker,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(pct(e.ret, digits: 2),
-                  style: tt.titleSmall?.copyWith(color: c, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              Text(prettyDate(e.date), style: tt.bodySmall),
+                  style: tt.titleSmall?.copyWith(
+                      color: c,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: tabular)),
             ]),
-            const SizedBox(height: 6),
-            Text('${num2(e.z?.abs(), digits: 1)}σ beyond market · volume ${num2(e.vr, digits: 1)}× normal',
+            const SizedBox(height: 4),
+            Text('${moveSize(e.z)}: ${vsMarket(e.z)} · ${volumeText(e.vr)}',
                 style: tt.bodySmall),
             if (e.announcement != null) ...[
               const SizedBox(height: 8),
+              Text(
+                [
+                  e.routine
+                      ? 'Routine filing near this date'
+                      : 'Filing near this date',
+                  if (e.exchange != null)
+                    '(${e.exchange}${e.filedRelative != null ? ', ${e.filedRelative}' : ''})',
+                ].join(' '),
+                style: tt.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: e.routine ? muted : null),
+              ),
               if (e.category != null)
-                Text('${e.exchange ?? ''} filing: ${e.category}',
-                    style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
-              Text(e.announcement!, maxLines: 3, overflow: TextOverflow.ellipsis, style: tt.bodySmall),
+                Text(e.category!, style: tt.bodySmall?.copyWith(color: muted)),
+              Text(e.announcement!,
+                  maxLines: e.routine ? 2 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall),
+              Text('May not be the cause of the move.',
+                  style: tt.labelSmall?.copyWith(color: muted)),
               if (e.link != null && onOpenLink != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -120,8 +179,14 @@ class EventTile extends StatelessWidget {
                 ),
             ] else ...[
               const SizedBox(height: 6),
-              Text('No exchange filing found near this date.',
-                  style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
+              Text(
+                  DateTime.tryParse(e.date)?.isBefore(DateTime.now()
+                              .subtract(const Duration(days: 32))) ??
+                          false
+                      ? 'Filings are only checked for spikes in the last 30 days.'
+                      : 'No company filing found near this date.',
+                  style: tt.bodySmall
+                      ?.copyWith(fontStyle: FontStyle.italic, color: muted)),
             ],
           ]),
         ),

@@ -6,8 +6,8 @@ class Sparkline extends StatelessWidget {
   const Sparkline({super.key, required this.values, required this.color});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(72, 28), painter: _SparkPainter(values, color));
+  Widget build(BuildContext context) => CustomPaint(
+      size: const Size(72, 28), painter: _SparkPainter(values, color));
 }
 
 class _SparkPainter extends CustomPainter {
@@ -38,5 +38,6 @@ class _SparkPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SparkPainter old) => old.values != values || old.color != color;
+  bool shouldRepaint(_SparkPainter old) =>
+      old.values != values || old.color != color;
 }

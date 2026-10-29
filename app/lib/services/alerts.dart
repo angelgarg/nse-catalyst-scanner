@@ -45,39 +45,68 @@ class Alerts {
 
   static Future<void> runCheck() async {
     final prefs = await SharedPreferences.getInstance();
-    if (!(prefs.getBool('alerts_on') ?? false) || !(prefs.getBool('pro_active') ?? false)) {
+    if (!(prefs.getBool('alerts_on') ?? false) ||
+        !(prefs.getBool('pro_active') ?? false)) {
       return;
     }
-    final watch = (prefs.getStringList('watchlist') ?? kDefaultWatchlist).toSet();
+    final watch =
+        (prefs.getStringList('watchlist') ?? kDefaultWatchlist).toSet();
     final lastSeen = prefs.getString(_lastSeenKey) ?? '';
     final res = await Dio().get<String>('$kDataUrl/events.json',
         options: Options(responseType: ResponseType.plain));
     final events = (jsonDecode(res.data ?? '[]') as List).whereType<Map>();
     final fresh = events
-        .where((e) => watch.contains(e['ticker']) && (e['date'] ?? '').compareTo(lastSeen) > 0)
+        .where((e) =>
+            watch.contains(e['ticker']) &&
+            (e['date'] ?? '').compareTo(lastSeen) > 0)
         .toList();
     if (fresh.isEmpty) return;
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails('spikes', 'Spike alerts',
-          channelDescription: 'A stock in your watchlist moved on its own news',
+          channelDescription:
+              'Evening alert when a stock you follow moves on its own',
           importance: Importance.high,
           priority: Priority.high),
     );
     for (final e in fresh.take(5)) {
       final ret = (e['ret'] as num?)?.toDouble() ?? 0;
-      final pct = '${ret >= 0 ? '+' : ''}${(ret * 100).toStringAsFixed(1)}%';
-      final why = (e['category'] as String?) ?? 'No exchange filing matched yet';
+      final vr = (e['vr'] as num?)?.toDouble();
+      final why = e['category'] != null
+          ? 'Filing near this date: ${e['category']}. Open Spikewise to read it.'
+          : '${vr == null ? '' : '${vr.toStringAsFixed(1)}× usual volume · '}No company filing found yet.';
       await _notifications.show(
         (e['ticker'] as String).hashCode & 0x7fffffff,
-        '${e['ticker']} spiked $pct on ${e['date']}',
+        '${e['ticker']} ${ret >= 0 ? '+' : '−'}${(ret.abs() * 100).toStringAsFixed(1)}%: '
+        '${((e['z'] as num?) ?? 0) >= 0 ? 'better' : 'worse'} than NIFTY explains (${_day(e['date'] as String)})',
         why,
         details,
       );
     }
-    final newest = fresh.map((e) => e['date'] as String).reduce((a, b) => a.compareTo(b) > 0 ? a : b);
+    final newest = fresh
+        .map((e) => e['date'] as String)
+        .reduce((a, b) => a.compareTo(b) > 0 ? a : b);
     await prefs.setString(_lastSeenKey, newest);
   }
+}
+
+String _day(String iso) {
+  const m = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  final d = DateTime.tryParse(iso);
+  return d == null ? iso : '${d.day} ${m[d.month - 1]}';
 }
 
 @pragma('vm:entry-point')
