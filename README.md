@@ -1,76 +1,43 @@
-# NSE Catalyst Scanner — Web Dashboard
+# Spikewise
 
-A live, mobile-friendly web app that scans NSE stocks for **catalyst days** — days when a stock moved significantly *beyond* what the broad market (NIFTY 50) was doing, backed by a volume spike. Deployed on PythonAnywhere so it works from any phone or laptop with no login required.
+Spots NSE stocks that moved on **their own news**, not just with the market, and shows the official NSE/BSE filing
+behind each move. Android app + free static CDN + a thin API, built and deployed automatically.
 
-## What it does
+```
+ GitHub Actions (daily)            GitHub Pages (CDN)              Android app (Flutter)
+ pipeline.py ── 450 stocks ──▶  data/v1/*.json, privacy, terms ◀── reads data, works offline
+                                                                     │ feedback / on-demand analyse
+ Render (auto-deploy on push) ◀──────────────────────────────────────┘
+ flask_app.py ── feedback ──▶ GitHub issues ──▶ AI agents ──▶ PRs ──▶ CI ──▶ auto-merge ──▶ deploy
+```
 
-- Strips out market-wide moves using a **rolling beta** against NIFTY 50
-- Flags residual moves that are statistically abnormal (z-score) AND backed by volume
-- Matches each flag to the official **NSE/BSE corporate announcement** nearest that date
-- Shows per-stock **Live Intelligence**: RSI, 5-day momentum, news sentiment, and a next-day move prediction
-- Lets you **manage your watchlist** from the web — add/remove any of 450+ NSE stocks
+## The rule
+A day is a **spike** when the stock's residual return (its return minus rolling-20-day beta × NIFTY 50 return) is more
+than 1.5σ from its own 20-day norm **and** volume is above 1.25× its 20-day average.
 
-## Project files
+## Pieces
+| Path | What |
+|---|---|
+| `catalyst_core.py` | Engine: prices (Yahoo batch, NSE fallback), features, model, announcements, headlines |
+| `pipeline.py` | Daily build of `data/v1` JSON with a data-quality gate |
+| `flask_app.py` | Render API: `/api/health`, `/api/v1/analyze/<t>`, `/api/v1/feedback`, legacy `/api/*` |
+| `web/` | Landing, privacy policy, terms (Play Store needs these URLs) |
+| `app/` | Flutter app: watchlist, spike feed, search, charts, alerts, Play Billing, feedback |
+| `build_dashboard.py`, `investor_widget.py` | Original single-page dashboard and desktop widget (local use) |
+| `AGENTS.md` | Rules every AI agent follows (auto-merge safety net) |
 
-| File | Purpose |
-|------|---------|
-| `catalyst_core.py` | Shared analysis engine — price loading, beta/residual/z-score, RSI, momentum, logistic direction model, NSE/BSE announcement lookup, news sentiment |
-| `build_dashboard.py` | Generates `site/index.html` from fresh data. Run this to rebuild. |
-| `flask_app.py` | Flask web server for PythonAnywhere. Routes: `/`, `/manage`, `/search`, `/add`, `/remove`, `/rebuild` |
-| `stocks_config.json` | Your watchlist — auto-updated when you add/remove stocks via `/manage` |
-| `investor_widget.py` / `.pyw` | Optional local desktop popup ("Investor's Cheat Sheet") — runs on Windows, no browser needed |
-| `requirements.txt` | Python dependencies |
-| `site/index.html` | The generated dashboard HTML (rebuilt by `build_dashboard.py`) |
+## URLs
+- Data/CDN: https://angelgarg.github.io/nse-catalyst-scanner/data/v1/meta.json
+- Privacy: https://angelgarg.github.io/nse-catalyst-scanner/privacy.html
+- API: https://nse-catalyst-scanner.onrender.com/api/health
 
-## Live deployment (PythonAnywhere)
+## Automation
+| Workflow | When | Does |
+|---|---|---|
+| `ci` | every PR / push | pytest, flutter analyze + test, release APK compiles |
+| `data` | 17:45 + 09:00 IST weekdays | rebuild data → Pages; failure keeps old data + opens `ops` issue |
+| `deploy-verify` | push touching backend | waits for Render to serve the commit; reverts it if unhealthy |
+| `android` | push touching `app/`, tags `v*` | signed AAB + APK; Play internal track when credentials are set |
+| `monitor` | hourly | checks data freshness + API; opens `ops` issue |
 
-The app runs at: **`https://angelgarg18.pythonanywhere.com`**
-
-- `/` — main dashboard
-- `/manage` — add/remove stocks, trigger rebuild
-- `/rebuild` — force rebuild with fresh NSE data
-
-Data is fetched live from NSE using the `nse` library (bypasses Yahoo Finance IP blocking on server). The page header shows a **LIVE NSE DATA** or **OFFLINE SAMPLE DATA** badge.
-
----
-
-## Setup guide — fresh installation
-
-See **`SETUP_GUIDE.md`** in this folder for complete step-by-step instructions to deploy this on a new machine or PythonAnywhere account.
-
----
-
-## Predictions & Live Intelligence
-
-Each stock card on the dashboard shows:
-
-| Field | What it is |
-|-------|-----------|
-| **Predicted move** | Next-day \|residual return\| magnitude — OLS regression on avg5 residual, 20d stdev, volume ratio, momentum, RSI |
-| **Direction probability** | P(Up tomorrow) from a pure-numpy logistic regression on the same features |
-| **RSI-14** | Wilder RSI — below 30 = oversold, above 70 = overbought |
-| **5d momentum** | 5-day price change % |
-| **News sentiment** | Keyword scoring of latest yfinance headlines (Bullish / Bearish / Neutral) |
-
-All predictions are illustrative in-sample statistics — not a trading signal and not investment advice.
-
-## Catalyst rule (same as Excel version)
-
-A day is **flagged** when both of the following hold:
-1. **|residual return| z-score ≥ 2.0** — the stock's beta-adjusted move is at least 2 standard deviations above its own 20-day rolling norm
-2. **Volume ratio ≥ 1.5×** — traded volume is at least 1.5× the 20-day average
-
-Residual return = actual daily return − (rolling beta × NIFTY daily return).
-
-## Desktop widget
-
-Double-click `investor_widget.pyw` for an always-on-top popup with two tabs:
-- **Principles** — eight value-investing one-liners tied to what this project measures
-- **Quick Take** — live rule-based read on any tracked stock (beta, volatility, predicted move, recent catalyst flag)
-- **Manage Stocks** — add/remove stocks from your local watchlist
-
-No extra install needed — just Python with the packages in `requirements.txt`.
-
----
-
-*Not investment advice. Live figures are real exchange prices but unverified for trading. Offline figures are simulated. Announcements are from NSE/BSE official disclosures, unvetted. Predictions are illustrative in-sample estimates of move size only.*
+*Educational statistics only. Not investment advice. Not SEBI-registered.*

@@ -1,0 +1,30 @@
+# Hourly synthetic check of what users hit; opens one `ops` issue per day on failure.
+name: monitor
+on:
+  schedule: [{cron: "7 * * * *"}]
+  workflow_dispatch:
+permissions: {issues: write}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe CDN + API
+        id: probe
+        run: |
+          set -e
+          cdn=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/v1
+          meta=$(curl -sf -m 30 $cdn/meta.json)
+          echo "meta: $meta"
+          last=$(echo "$meta" | python3 -c "import sys,json;print(json.load(sys.stdin)['last_market_date'])")
+          age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
+          [ "$age" -le 5 ] || { echo "data is $age days old"; exit 1; }
+          curl -sf -m 30 -o /dev/null -w "summary %{time_total}s %{size_download}B\n" $cdn/summary.json
+          curl -sf -m 120 -o /dev/null -w "api health %{time_total}s\n" https://nse-catalyst-scanner.onrender.com/api/health
+      - name: Report
+        if: failure()
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          t="Monitor failing $(date -u +%F)"
+          gh issue list --repo "$GITHUB_REPOSITORY" --label ops --state open --search "$t" | grep -q . || \
+            gh issue create --repo "$GITHUB_REPOSITORY" --label ops --title "$t" \
+              --body "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

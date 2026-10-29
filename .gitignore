@@ -1,25 +1,14 @@
-# Python
 __pycache__/
 *.py[cod]
-*.egg-info/
 .env
 venv/
 .venv/
-
-# NSE/BSE download cache
-/tmp/
-*.json.bak
-
-# Generated dashboard (rebuilt on deploy — don't commit stale HTML)
-site/index.html
-
-# OS
+.pytest_cache/
+/public/
+/site/index.html
+*.jks
+key.properties
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
-
-# Keep stocks_config.json (user's watchlist)
-!stocks_config.json

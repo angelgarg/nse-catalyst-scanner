@@ -1,0 +1,63 @@
+# Signed Android builds. Every push to main touching the app -> signed AAB/APK artifacts
+# (and Play internal testing track once PLAY_SERVICE_ACCOUNT_JSON is set).
+# Tag vX.Y.Z -> also a GitHub Release with the APK attached.
+name: android
+on:
+  push:
+    branches: [main]
+    paths: [app/**, .github/workflows/android.yml]
+    tags: ["v*"]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions: {contents: write}
+    defaults: {run: {working-directory: app}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "17"}
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: "3.27.3", channel: stable, cache: true}
+      - name: Restore upload keystore
+        env: {KS: "${{ secrets.SPIKEWISE_KEYSTORE_B64 }}"}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "SPIKEWISE_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No SPIKEWISE_KEYSTORE_B64 secret: building debug-signed"
+          fi
+      - run: flutter pub get
+      - name: Build
+        env:
+          SPIKEWISE_KEYSTORE_PASSWORD: ${{ secrets.SPIKEWISE_KEYSTORE_PASSWORD }}
+          SPIKEWISE_KEY_PASSWORD: ${{ secrets.SPIKEWISE_KEYSTORE_PASSWORD }}
+          SPIKEWISE_KEY_ALIAS: upload
+        run: |
+          flutter build appbundle --release --build-number=$((100 + GITHUB_RUN_NUMBER))
+          flutter build apk --release --build-number=$((100 + GITHUB_RUN_NUMBER))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spikewise-${{ github.run_number }}
+          path: |
+            app/build/app/outputs/bundle/release/app-release.aab
+            app/build/app/outputs/flutter-apk/app-release.apk
+      - name: Check Play credentials
+        id: play
+        env: {SA: "${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}"}
+        run: echo "enabled=$([ -n "$SA" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Upload to Play internal testing
+        if: steps.play.outputs.enabled == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.angelgarg.spikewise
+          releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: gh release create "$GITHUB_REF_NAME" build/app/outputs/flutter-apk/app-release.apk --generate-notes

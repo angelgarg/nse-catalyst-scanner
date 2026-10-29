@@ -1,0 +1,10 @@
+{
+  "min_app_build": 1,
+  "latest_app_build": 1,
+  "notice": null,
+  "free_watchlist_limit": 5,
+  "free_history_days": 30,
+  "pro_product_ids": ["spikewise_pro_monthly", "spikewise_pro_yearly"],
+  "api_base": "https://nse-catalyst-scanner.onrender.com",
+  "support_email": "gargangel2233@gmail.com"
+}

@@ -1,0 +1,49 @@
+# Daily data build -> GitHub Pages (the app's CDN). A failed quality gate keeps
+# yesterday's data online and opens an `ops` issue for the agents.
+name: data
+on:
+  schedule:
+    - cron: "15 12 * * 1-5"   # 17:45 IST, after NSE close + filings settle
+    - cron: "30 3 * * 1-5"    # 09:00 IST, picks up late-evening filings
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [web/**, pipeline.py, catalyst_core.py, nse_universe.json, app_config.json]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  issues: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements.txt
+      - name: Build data
+        env:
+          PREV_DATA_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/v1
+        run: python pipeline.py --out public
+      - run: cp -r web/* public/ && touch public/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: public}
+      - name: Open ops issue on failure
+        if: failure()
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --label ops \
+            --title "Data build failed ($(date -u +%F))" \
+            --body "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID — yesterday's data is still being served." || true
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: {name: github-pages, url: "${{ steps.d.outputs.page_url }}"}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4

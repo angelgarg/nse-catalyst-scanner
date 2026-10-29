@@ -791,3 +791,167 @@ def fetch_announcement_for_event(symbol, event_date):
 
     _ann_cache[key] = result
     return result
+
+
+# ------------------------------------------------------------------ batch pipeline helpers
+# Used by pipeline.py (daily CDN data build) and flask_app.py (on-demand analysis).
+
+def _fnum(x, nd=2):
+    import math
+    if x is None:
+        return None
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(x) or math.isinf(x):
+        return None
+    return round(x, nd)
+
+
+def _yf_frame(h):
+    """Normalise a yfinance history frame to Date/Close/Volume."""
+    h = h.reset_index()
+    h = h.rename(columns={h.columns[0]: "Date"})[["Date", "Close", "Volume"]]
+    h["Date"] = pd.to_datetime(h["Date"]).dt.tz_localize(None).dt.normalize()
+    h = h.dropna(subset=["Close"])
+    h["Volume"] = h["Volume"].fillna(0).astype("int64")
+    return h.sort_values("Date").reset_index(drop=True)
+
+
+def fetch_prices_batch(tickers, period="2y", chunk=100):
+    """Fetch daily prices for many NSE tickers at once.
+
+    Yahoo batch download first (one request per `chunk` tickers, split-adjusted),
+    then NSE direct for anything Yahoo missed. Returns (frames, nifty, failed)
+    where frames maps ticker -> DataFrame[Date, Close, Volume] aligned to NIFTY dates.
+    """
+    import yfinance as yf
+
+    tickers = list(dict.fromkeys(t.upper() for t in tickers))
+    frames, failed = {}, []
+
+    nifty = None
+    try:
+        nh = yf.Ticker("^NSEI").history(period=period, interval="1d", auto_adjust=True)
+        if nh is not None and len(nh) >= 30:
+            nifty = _yf_frame(nh)
+    except Exception as err:
+        print(f"[batch] yahoo NIFTY failed: {err}")
+
+    for i in range(0, len(tickers), chunk):
+        part = tickers[i:i + chunk]
+        try:
+            raw = yf.download([t + ".NS" for t in part], period=period, interval="1d",
+                              auto_adjust=True, group_by="ticker", progress=False,
+                              threads=True)
+        except Exception as err:
+            print(f"[batch] yahoo chunk {i} failed: {err}")
+            continue
+        for t in part:
+            try:
+                h = raw[t + ".NS"] if len(part) > 1 else raw
+                if isinstance(h.columns, pd.MultiIndex):
+                    h = h.droplevel(0, axis=1)
+                h = _yf_frame(h)
+                if len(h) >= 30:
+                    frames[t] = h
+            except Exception:
+                pass
+
+    missing = [t for t in tickers if t not in frames]
+    if missing or nifty is None:
+        print(f"[batch] yahoo missed {len(missing)} tickers -- trying NSE direct")
+        for t in missing:
+            try:
+                f, n = _live_prices_nse([t])
+                frames[t] = f[t]
+                if nifty is None:
+                    nifty = n
+            except Exception as err:
+                print(f"[batch] NSE {t} failed: {err}")
+                failed.append(t)
+    if nifty is None:
+        raise RuntimeError("no NIFTY 50 data from Yahoo or NSE")
+
+    nifty = nifty[["Date", "Close", "Volume"]].copy()
+    nifty["Date"] = pd.to_datetime(nifty["Date"]).dt.normalize()
+    nifty = nifty.drop_duplicates("Date").sort_values("Date").reset_index(drop=True)
+    return frames, nifty, failed
+
+
+def align_to_nifty(df, nifty):
+    """Inner-join a stock frame onto NIFTY dates; returns (stock_df, nifty_ret)."""
+    m = df.merge(nifty[["Date", "Close"]].rename(columns={"Close": "NClose"}),
+                 on="Date", how="inner").sort_values("Date").reset_index(drop=True)
+    nifty_ret = m["NClose"].pct_change()
+    return m[["Date", "Close", "Volume"]], nifty_ret
+
+
+def analyze_stock(tic, name, df, nifty_ret, with_news=True, with_announcements=True,
+                  ann_since=None, ann_lookup=None):
+    """Full per-stock analysis -- the single source of truth for the dashboard,
+    the CDN data build and the API. Returns (stock_dict, events).
+
+    ann_since:  only query exchange announcements for events on/after this date
+                (older events keep whatever ann_lookup returns).
+    ann_lookup: callable(ticker, date_str) -> (category, text, exchange, link) or None,
+                used to reuse previously fetched announcements.
+    """
+    import math
+    d = compute_features(df, nifty_ret)
+    n = len(d)
+    ev_mask = d["event"].fillna(False)
+
+    ret_1m = d["Close"].iloc[-1] / d["Close"].iloc[-22] - 1 if n >= 22 else None
+    ret_3m = d["Close"].iloc[-1] / d["Close"].iloc[-64] - 1 if n >= 64 else None
+    ann_vol = d["ret"].std() * math.sqrt(252) if d["ret"].notna().any() else None
+    beta_series = d["beta20"].dropna()
+    idx_big = d["ret"].abs().idxmax() if d["ret"].notna().any() else None
+    ev_dates = d.loc[ev_mask, "Date"]
+    pred_move, pred_dir, pred_r2, pred_n = forecast_next_move(d)
+    rsi_series, mom5_series = d["rsi"].dropna(), d["mom5"].dropna()
+    z_last = d["z"].iloc[-1] if n else None
+    vr_last = d["vr"].iloc[-1] if n else None
+
+    stock = {
+        "ticker": tic, "name": name,
+        "dates": d["Date"].dt.strftime("%Y-%m-%d").tolist(),
+        "close": [_fnum(v) for v in d["Close"]],
+        "ma20": [_fnum(v) for v in d["ma20"]],
+        "volume": [int(v) if not pd.isna(v) else 0 for v in d["Volume"]],
+        "event_flags": [bool(v) for v in ev_mask],
+        "last_close": _fnum(d["Close"].iloc[-1]),
+        "last_date": d["Date"].iloc[-1].strftime("%Y-%m-%d"),
+        "chg_1d": _fnum(d["ret"].iloc[-1], 4),
+        "ret_1m": _fnum(ret_1m, 4), "ret_3m": _fnum(ret_3m, 4),
+        "ann_vol": _fnum(ann_vol, 4),
+        "beta": _fnum(beta_series.iloc[-1], 2) if len(beta_series) else None,
+        "big_move": _fnum(d.loc[idx_big, "ret"], 4) if idx_big is not None else None,
+        "cat_count": int(ev_mask.sum()),
+        "last_cat_date": ev_dates.max().strftime("%Y-%m-%d") if len(ev_dates) else None,
+        "z_last": _fnum(z_last, 2), "vr_last": _fnum(vr_last, 2),
+        "pred_move": _fnum(pred_move, 4), "pred_dir": _fnum(pred_dir, 3),
+        "pred_r2": _fnum(pred_r2, 3), "pred_n": pred_n,
+        "rsi": _fnum(rsi_series.iloc[-1], 1) if len(rsi_series) else None,
+        "mom5": _fnum(mom5_series.iloc[-1], 4) if len(mom5_series) else None,
+        "sentiment": (fetch_news_sentiment(tic) if with_news
+                      else {"score": 0.0, "label": "neutral", "headlines": [], "count": 0}),
+    }
+
+    events = []
+    since = pd.Timestamp(ann_since) if ann_since is not None else None
+    for _, row in d.loc[ev_mask].iterrows():
+        date_s = row["Date"].strftime("%Y-%m-%d")
+        ann = ann_lookup(tic, date_s) if ann_lookup else None
+        if ann is None and with_announcements and (since is None or row["Date"] >= since):
+            ann = fetch_announcement_for_event(tic, row["Date"])
+        category, announcement, exchange, link = ann or (None, None, None, None)
+        events.append({
+            "date": date_s, "ticker": tic, "name": name,
+            "ret": _fnum(row["ret"], 4), "z": _fnum(row["z"], 2), "vr": _fnum(row["vr"], 2),
+            "direction": "Up" if row["ret"] >= 0 else "Down",
+            "category": category, "announcement": announcement,
+            "exchange": exchange, "link": link,
+        })
+    return stock, events

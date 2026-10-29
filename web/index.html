@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spikewise</title><meta name="description" content="Spikewise spots NSE stocks that moved on their own news, not just with the market, and shows the official announcement behind the move.">
+<link rel="stylesheet" href="style.css"></head><body><main>
+<h1>Spikewise</h1><p class="muted">Which NSE stocks moved because of real news, and which just moved with the market?</p>
+<div class="card"><b>How it works.</b> Every trading day Spikewise removes the part of each stock's move that NIFTY 50 explains
+(rolling 20-day beta). A day is flagged as a <b>spike</b> only when the remaining move is unusually large (z-score above 1.5)
+<i>and</i> volume is above 1.25&times; its 20-day average. Each spike is matched to the nearest official NSE/BSE corporate announcement.</div>
+<div class="card"><b>Coverage.</b> <span id="cov">About 450 NSE stocks</span>, refreshed after market close.</div>
+<p><a class="btn" href="https://play.google.com/store/apps/details?id=com.angelgarg.spikewise">Get it on Google Play</a></p>
+<p class="muted" style="font-size:14px">Educational statistics only. Not investment advice, not a recommendation to buy or sell. See <a href="terms.html">terms</a>.</p>
+<footer><a href="index.html">Home</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms &amp; disclaimer</a> · Contact: gargangel2233@gmail.com</footer></main>
+<script>fetch('data/v1/meta.json').then(r=>r.json()).then(m=>{document.getElementById('cov').textContent=m.stocks+' NSE stocks, last updated for '+m.last_market_date}).catch(()=>{})</script>
+</body></html>

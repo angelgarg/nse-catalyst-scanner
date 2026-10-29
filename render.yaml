@@ -2,17 +2,13 @@ services:
   - type: web
     name: nse-catalyst-scanner
     runtime: python
-    buildCommand: pip install -r requirements.txt && python startup.py
+    plan: free
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn flask_app:app
+    healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
-    autoDeploy: true
-
-  # Free cron job — pings the app every 10 min to prevent sleep
-  - type: cron
-    name: keep-alive
-    runtime: python
-    schedule: "*/10 * * * *"
-    buildCommand: pip install requests
-    startCommand: python -c "import requests; requests.get('https://nse-catalyst-scanner.onrender.com/api/health')"
+        value: 3.11.9
+      - key: FEEDBACK_GITHUB_TOKEN
+        sync: false

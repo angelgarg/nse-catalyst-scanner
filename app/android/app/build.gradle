@@ -1,0 +1,69 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// Release signing: android/key.properties locally, or SPIKEWISE_* env vars in CI.
+def keyProps = new Properties()
+def keyPropsFile = rootProject.file("key.properties")
+if (keyPropsFile.exists()) {
+    keyPropsFile.withReader("UTF-8") { keyProps.load(it) }
+}
+def signingValue = { String prop, String env -> keyProps.getProperty(prop) ?: System.getenv(env) }
+def releaseStore = signingValue("storeFile", "SPIKEWISE_KEYSTORE_PATH")
+
+android {
+    namespace = "com.angelgarg.spikewise"
+    compileSdk = 36
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        applicationId = "com.angelgarg.spikewise"
+        minSdk = 23
+        targetSdk = 36
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        release {
+            if (releaseStore) {
+                storeFile = file(releaseStore)
+                storePassword = signingValue("storePassword", "SPIKEWISE_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "SPIKEWISE_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "SPIKEWISE_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Falls back to debug keys when no release keystore is configured,
+            // so CI on forks / PRs can still build an installable APK.
+            signingConfig = releaseStore ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
+}
+
+flutter {
+    source = "../.."
+}
