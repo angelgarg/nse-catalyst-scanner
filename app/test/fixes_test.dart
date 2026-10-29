@@ -5,7 +5,8 @@ import 'package:spikewise/widgets/format.dart';
 
 void main() {
   test('default watchlist leaves room under the free limit', () {
-    expect(kDefaultWatchlist.length, lessThan(const RemoteConfig().freeWatchlistLimit));
+    expect(kDefaultWatchlist.length,
+        lessThan(const RemoteConfig().freeWatchlistLimit));
   });
 
   test('plain-language move sizes', () {
@@ -13,6 +14,12 @@ void main() {
     expect(moveSize(-2.4), 'Very big move');
     expect(moveSize(5), 'Rare move');
     expect(volumeText(5.46), '5.5× usual volume');
+  });
+
+  test('direction follows the market-adjusted move, not the raw return', () {
+    expect(vsMarket(1.85),
+        'did better than NIFTY explains'); // e.g. fell 1.19% but beat NIFTY
+    expect(vsMarket(-2.0), 'did worse than NIFTY explains');
   });
 
   test('zero change is neutral, not +0.00%', () {
@@ -27,8 +34,8 @@ void main() {
   });
 
   test('filing timing relative to the spike', () {
-    SpikeEvent ev(String filed) =>
-        SpikeEvent.fromJson({'date': '2026-10-23', 'ticker': 'X', 'filed': filed});
+    SpikeEvent ev(String filed) => SpikeEvent.fromJson(
+        {'date': '2026-10-23', 'ticker': 'X', 'filed': filed});
     expect(ev('2026-10-21').filedRelative, 'filed 2 days before');
     expect(ev('2026-10-23').filedRelative, 'filed the same day');
     expect(ev('2026-10-24').filedRelative, 'filed 1 day after');

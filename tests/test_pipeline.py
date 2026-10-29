@@ -12,4 +12,4 @@ def test_light_row_has_sparkline():
                            "z_last", "vr_last", "pred_move", "pred_dir", "rsi", "mom5")}
     s.update(close=list(range(100)), sentiment={"label": "bullish"})
     row = pipeline.light_row(s)
-    assert row["spark"] == list(range(70, 100)) and row["sentiment"] == "bullish"
+    assert row["spark"] == list(range(70, 100)) and "sentiment" not in row

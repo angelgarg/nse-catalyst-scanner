@@ -87,7 +87,6 @@ def light_row(s):
         "cat_count": s["cat_count"], "last_cat_date": s["last_cat_date"],
         "z_last": s["z_last"], "vr_last": s["vr_last"],
         "rsi": s["rsi"], "mom5": s["mom5"],
-        "sentiment": s["sentiment"]["label"],
         "spark": s["close"][-30:],
     }
 
@@ -106,6 +105,9 @@ def drop_partial_session(frames, nifty, now=None):
 
 def public_detail(s, ev):
     out = {k: v for k, v in s.items() if k not in PRIVATE_FIELDS}
+    # Keyword "bullish/bearish" tone reads like a view on the stock: publish headlines only.
+    out["sentiment"] = {"headlines": s["sentiment"].get("headlines", []),
+                        "count": s["sentiment"].get("count", 0)}
     out["events"] = sorted(ev, key=lambda e: e["date"], reverse=True)
     return out
 

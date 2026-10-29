@@ -164,7 +164,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               child: Column(children: [
                 ListTile(
                   title: const Text('Recent headlines'),
-                  subtitle: Text('Keyword tone: ${d.sentimentLabel}'),
+                  subtitle: const Text(
+                      'From public news feeds. Not checked by Spikewise.'),
                 ),
                 for (final h in d.headlines)
                   ListTile(
@@ -216,9 +217,8 @@ class _TodayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final z = s.zLast;
-    final dir = (z ?? 0) >= 0 ? 'rose' : 'fell';
     final text = s.spikedToday
-        ? 'Latest session: $dir more than NIFTY explains (${moveSize(z).toLowerCase()}), '
+        ? 'Latest session: ${vsMarket(z)} (${moveSize(z).toLowerCase()}), '
             'on ${volumeText(s.vrLast)}.'
         : 'Latest session: moved roughly in line with the market. No spike.';
     return Card(

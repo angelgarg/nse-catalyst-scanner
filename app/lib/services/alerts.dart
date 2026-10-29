@@ -71,14 +71,14 @@ class Alerts {
     );
     for (final e in fresh.take(5)) {
       final ret = (e['ret'] as num?)?.toDouble() ?? 0;
-      final verb = ret >= 0 ? 'rose' : 'fell';
       final vr = (e['vr'] as num?)?.toDouble();
       final why = e['category'] != null
           ? 'Filing near this date: ${e['category']}. Open Spikewise to read it.'
           : '${vr == null ? '' : '${vr.toStringAsFixed(1)}× usual volume · '}No company filing found yet.';
       await _notifications.show(
         (e['ticker'] as String).hashCode & 0x7fffffff,
-        '${e['ticker']} $verb ${(ret.abs() * 100).toStringAsFixed(1)}% on its own (${_day(e['date'] as String)})',
+        '${e['ticker']} ${ret >= 0 ? '+' : '−'}${(ret.abs() * 100).toStringAsFixed(1)}%: '
+        '${((e['z'] as num?) ?? 0) >= 0 ? 'better' : 'worse'} than NIFTY explains (${_day(e['date'] as String)})',
         why,
         details,
       );

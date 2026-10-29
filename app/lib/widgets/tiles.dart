@@ -111,7 +111,6 @@ class EventTile extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final c = e.up ? upColor(context) : downColor(context);
-    final verb = e.up ? 'rose' : 'fell';
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -144,8 +143,7 @@ class EventTile extends StatelessWidget {
                       fontFeatures: tabular)),
             ]),
             const SizedBox(height: 4),
-            Text(
-                '${moveSize(e.z)}: $verb more than NIFTY explains · ${volumeText(e.vr)}',
+            Text('${moveSize(e.z)}: ${vsMarket(e.z)} · ${volumeText(e.vr)}',
                 style: tt.bodySmall),
             if (e.announcement != null) ...[
               const SizedBox(height: 8),
@@ -181,7 +179,12 @@ class EventTile extends StatelessWidget {
                 ),
             ] else ...[
               const SizedBox(height: 6),
-              Text('No company filing found near this date.',
+              Text(
+                  DateTime.tryParse(e.date)?.isBefore(DateTime.now()
+                              .subtract(const Duration(days: 32))) ??
+                          false
+                      ? 'Filings are only checked for spikes in the last 30 days.'
+                      : 'No company filing found near this date.',
                   style: tt.bodySmall
                       ?.copyWith(fontStyle: FontStyle.italic, color: muted)),
             ],

@@ -45,6 +45,12 @@ String moveSize(double? z) {
   return 'Big move';
 }
 
+/// The spike is about the market-adjusted move, so direction comes from z, not the
+/// raw return: a stock can fall 1% yet do better than NIFTY implied.
+String vsMarket(double? z) => (z ?? 0) >= 0
+    ? 'did better than NIFTY explains'
+    : 'did worse than NIFTY explains';
+
 String volumeText(double? vr) =>
     vr == null ? '' : '${vr.toStringAsFixed(1)}× usual volume';
 

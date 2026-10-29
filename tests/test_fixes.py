@@ -82,5 +82,7 @@ def test_partial_session_dropped_before_close():
 
 def test_model_fields_never_published():
     s = {"ticker": "X", "pred_move": 0.1, "pred_dir": 0.9, "pred_r2": 0.05, "pred_n": 300, "close": [1]}
+    s["sentiment"] = {"label": "bullish", "score": 0.4, "headlines": [{"title": "t"}], "count": 1}
     out = pipeline.public_detail(s, [])
     assert not any(k.startswith("pred_") for k in out)
+    assert "label" not in out["sentiment"] and out["sentiment"]["headlines"]
