@@ -29,7 +29,7 @@ ThemeData buildTheme(Brightness b) {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       color: dark ? const Color(0xFF121A2C) : Colors.white,
       margin: EdgeInsets.zero,
