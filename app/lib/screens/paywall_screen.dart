@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../config.dart';
 import '../services/billing.dart';
@@ -51,10 +50,26 @@ class PaywallScreen extends ConsumerWidget {
               title: Text(f.$2),
               subtitle: Text(f.$3)),
         const SizedBox(height: 16),
+        if (pro)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Manage or cancel subscription'),
+            onPressed: () => openUrl(manageSubscriptionUrl(null)),
+          ),
         if (!pro) ...[
+          if (billing.pending)
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.hourglass_top),
+                title: Text('Payment pending'),
+                subtitle: Text(
+                    'UPI and bank approvals can take a few minutes. Pro turns on by itself once Google confirms. '
+                    'Please don\'t pay again.'),
+              ),
+            ),
           if (billing.loading)
             const Center(child: SpikeMarkLoader())
-          else if (!billing.available || billing.products.isEmpty)
+          else if (!billing.available || billing.plans.isEmpty)
             const Card(
               child: ListTile(
                 leading: Icon(Icons.info_outline),
@@ -65,17 +80,16 @@ class PaywallScreen extends ConsumerWidget {
             )
           else
             // Yearly first: it's the better deal and the one most people should pick.
-            for (final p in [
-              ...billing.products
-            ]..sort((a, b) => b.rawPrice.compareTo(a.rawPrice)))
+            for (final p in billing.plans.reversed)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _PlanButton(
                   p: p,
-                  monthly: billing.products
-                      .where((m) => m.id == kProMonthly)
-                      .firstOrNull,
-                  onTap: () => ref.read(billingProvider.notifier).buy(p),
+                  monthly:
+                      billing.plans.where((m) => m.id == kProMonthly).firstOrNull,
+                  onTap: billing.pending
+                      ? null
+                      : () => ref.read(billingProvider.notifier).buy(p),
                 ),
               ),
           const Text(
@@ -112,18 +126,18 @@ class PaywallScreen extends ConsumerWidget {
 }
 
 class _PlanButton extends StatelessWidget {
-  final ProductDetails p;
-  final ProductDetails? monthly;
-  final VoidCallback onTap;
+  final Plan p;
+  final Plan? monthly;
+  final VoidCallback? onTap;
   const _PlanButton({required this.p, required this.onTap, this.monthly});
 
   @override
   Widget build(BuildContext context) {
     final yearly = p.id == kProYearly;
-    final perMonth = (p.rawPrice / 12).round();
-    final saving = monthly == null || monthly!.rawPrice <= 0
+    final perMonth = (p.priceValue / 12).round();
+    final saving = monthly == null || monthly!.priceValue <= 0
         ? null
-        : (100 * (1 - p.rawPrice / (monthly!.rawPrice * 12))).round();
+        : (100 * (1 - p.priceValue / (monthly!.priceValue * 12))).round();
     final style = yearly
         ? FilledButton.styleFrom(padding: const EdgeInsets.all(16))
         : FilledButton.styleFrom(
@@ -142,8 +156,11 @@ class _PlanButton extends StatelessWidget {
                 style:
                     const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             if (yearly)
-              Text('${p.currencySymbol}$perMonth/month, billed yearly'
+              Text('${p.currency}$perMonth/month, billed yearly'
                   '${saving != null && saving > 0 ? ' · save $saving%' : ''}'),
+            if (p.trial != null)
+              Text('${p.trial}, then ${p.price}${yearly ? '/yr' : '/mo'}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
           ]),
         ),
         Text('${p.price}${yearly ? '/yr' : '/mo'}',
