@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
+import 'quiz.dart';
 
 /// Bite-sized "Why?" explainers (education review 2026-10-29). Concept-level only:
 /// no named stocks, no live prices, nothing forward-looking, so they are safe next
@@ -203,6 +204,16 @@ class LearnScreen extends ConsumerWidget {
         ),
       ]),
       body: ListView(children: [
+        ListTile(
+          leading: const Icon(Icons.extension_outlined),
+          title: Text(hi ? 'Spike pehchaniye (quiz)' : 'Spot the spike (quiz)'),
+          subtitle: Text(hi
+              ? '45+ din purane chart par andaza lagaiye'
+              : 'Guess the day on a chart from 45+ days ago'),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const QuizScreen())),
+        ),
+        const Divider(),
         for (final entry in explainers.entries)
           ListTile(
             title: Text(hi ? entry.value.titleHi : entry.value.title),
