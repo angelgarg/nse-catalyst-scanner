@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../config.dart';
 import '../services/alerts.dart';
+import '../services/billing.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/format.dart';
@@ -46,7 +47,9 @@ class MoreScreen extends ConsumerWidget {
           subtitle: Text(pro
               ? 'Manage in Google Play → Subscriptions'
               : 'Unlimited watchlist, alerts, full history'),
-          onTap: () => openPaywall(context),
+          onTap: pro
+              ? () => openUrl(manageSubscriptionUrl(null))
+              : () => openPaywall(context),
         ),
         SwitchListTile(
           secondary: const Icon(Icons.nights_stay_outlined),
