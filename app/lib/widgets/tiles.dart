@@ -6,6 +6,7 @@ import '../motion.dart';
 import '../screens/stock_detail_screen.dart';
 import '../theme.dart';
 import 'format.dart';
+import 'share_card.dart';
 import 'sparkline.dart';
 
 void openStock(BuildContext context, String ticker) => Navigator.of(context)
@@ -163,6 +164,13 @@ class EventTile extends StatelessWidget {
                         color: c,
                         fontWeight: FontWeight.w700,
                         fontFeatures: tabular)),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Share this spike',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.share_outlined, size: 20),
+                  onPressed: () => shareSpike(context, e),
+                ),
               ]),
               const SizedBox(height: 4),
               Text(
