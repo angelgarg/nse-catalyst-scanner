@@ -181,6 +181,7 @@ class StockDetail {
   final List<String> dates;
   final List<double?> close;
   final List<double?> ma20;
+  final List<int> volume;
   final List<bool> eventFlags;
   final double? annVol;
   final double? beta;
@@ -199,6 +200,7 @@ class StockDetail {
     required this.dates,
     required this.close,
     required this.ma20,
+    this.volume = const [],
     required this.eventFlags,
     this.annVol,
     this.beta,
@@ -227,6 +229,9 @@ class StockDetail {
       ma20: (j['ma20'] as List? ?? const []).map(_d).toList(),
       eventFlags: (j['event_flags'] as List? ?? const [])
           .map((v) => v == true)
+          .toList(),
+      volume: (j['volume'] as List? ?? const [])
+          .map((v) => v is num ? v.toInt() : 0)
           .toList(),
       annVol: _d(j['ann_vol']),
       beta: _d(j['beta']),
