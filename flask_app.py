@@ -6,18 +6,21 @@ This server is deliberately thin:
   GET  /api/health                 liveness + deployed commit + data freshness
   GET  /api/v1/analyze/<ticker>    on-demand analysis for a ticker not in the daily data
   POST /api/v1/feedback            in-app feedback -> GitHub issue (label: feedback)
+  GET  /data/v1/<file>.json        mirror of the daily data, for networks that block GitHub Pages
+                                   (e.g. Airtel DNS flags angelgarg.github.io as spam)
   GET  /api/stocks, /api/events, /api/stock/<t>, /api/search, /api/watchlist
                                    legacy endpoints (pre-Spikewise app), served from CDN data
 """
 import datetime
 import os
+import re
 import sys
 import threading
 import time
 from collections import defaultdict, deque
 
 import requests
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, Response, jsonify, redirect, request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -108,14 +111,54 @@ def index():
     return redirect(SITE_URL + "/", code=302)
 
 
+def _site_page(name):
+    """Serve a site page from here instead of redirecting, so it still opens on
+    networks that block GitHub Pages. <base> keeps its relative links working."""
+    try:
+        html = _cached("page:" + name, 3600, lambda: _fetch_text(f"{SITE_URL}/{name}"))
+    except Exception:
+        return redirect(f"{SITE_URL}/{name}", code=302)
+    html = html.replace("<head>", f'<head><base href="{SITE_URL}/">', 1)
+    resp = Response(html, mimetype="text/html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+def _fetch_text(url):
+    r = requests.get(url, timeout=20)
+    r.raise_for_status()
+    return r.text
+
+
 @app.route("/privacy")
 def privacy():
-    return redirect(SITE_URL + "/privacy.html", code=302)
+    return _site_page("privacy.html")
 
 
 @app.route("/terms")
 def terms():
-    return redirect(SITE_URL + "/terms.html", code=302)
+    return _site_page("terms.html")
+
+
+# ------------------------------------------------------------------ data mirror
+
+_DATA_PATH = re.compile(r"^(?:stocks/)?[A-Za-z0-9_&-]{1,40}\.json$")
+
+
+@app.route("/data/v1/<path:path>")
+def data_mirror(path):
+    """Same files as the GitHub Pages CDN; the app falls back here when Pages is
+    unreachable. Paths are whitelisted so this can't be used as an open proxy."""
+    if not _DATA_PATH.match(path):
+        return jsonify({"error": "not found"}), 404
+    try:
+        resp = jsonify(cdn(path, 600))
+    except requests.HTTPError:
+        return jsonify({"error": "not found"}), 404
+    except Exception:
+        return jsonify({"error": "data temporarily unavailable"}), 502
+    resp.headers["Cache-Control"] = "public, max-age=600"
+    return resp
 
 
 # ------------------------------------------------------------------ v1 API
