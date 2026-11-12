@@ -26,14 +26,32 @@ class Api {
   final SharedPreferences _prefs;
   final Dio _dio;
 
+  /// Set once the CDN fails without an HTTP answer (blocked DNS, bad
+  /// certificate), so the rest of the session goes straight to the mirror.
+  bool _useMirror = false;
+
+  Future<String> _get(String base, String path, {Duration? timeout}) async {
+    final res = await _dio.get<String>('$base/$path',
+        options: Options(responseType: ResponseType.plain, receiveTimeout: timeout));
+    return res.data ?? '';
+  }
+
   Future<dynamic> _cdn(String path, {bool preferCache = false}) async {
     final key = 'cache:$path';
     final cached = _prefs.getString(key);
     if (preferCache && cached != null) return jsonDecode(cached);
     try {
-      final res = await _dio.get<String>('$kDataUrl/$path',
-          options: Options(responseType: ResponseType.plain));
-      final body = res.data ?? '';
+      String body;
+      try {
+        if (_useMirror) throw DioException(requestOptions: RequestOptions());
+        body = await _get(kDataUrl, path);
+      } on DioException catch (e) {
+        final status = e.response?.statusCode;
+        if (status != null && status < 500) rethrow;
+        _useMirror = true;
+        // Render may be waking from sleep: give it longer than the CDN.
+        body = await _get(kDataMirrorUrl, path, timeout: const Duration(seconds: 90));
+      }
       await _prefs.setString(key, body);
       return jsonDecode(body);
     } on DioException catch (e) {

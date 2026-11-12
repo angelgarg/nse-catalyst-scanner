@@ -3,6 +3,10 @@
 /// API is only used for feedback and on-demand analysis.
 const kDataUrl = 'https://angelgarg.github.io/nse-catalyst-scanner/data/v1';
 const kApiUrl = 'https://nse-catalyst-scanner.onrender.com';
+
+/// Same files served by the Render API, used when GitHub Pages is unreachable
+/// (Airtel's DNS, for one, flags angelgarg.github.io as spam).
+const kDataMirrorUrl = '$kApiUrl/data/v1';
 const kSiteUrl = 'https://angelgarg.github.io/nse-catalyst-scanner';
 const kPrivacyUrl = '$kSiteUrl/privacy.html';
 const kTermsUrl = '$kSiteUrl/terms.html';

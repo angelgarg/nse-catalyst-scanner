@@ -85,3 +85,24 @@ def test_unknown_ticker_is_negative_cached(client, monkeypatch):
     assert client.get("/api/v1/analyze/ZZZQQ").status_code == 404
     assert client.get("/api/v1/analyze/ZZZQQ").status_code == 404
     assert calls == ["ZZZQQ"]
+
+
+def test_data_mirror(client):
+    r = client.get("/data/v1/meta.json")
+    assert r.status_code == 200 and r.get_json()["stocks"] == 2
+    assert "max-age" in r.headers["Cache-Control"]
+    assert client.get("/data/v1/stocks/M_M.json").get_json()["ticker"] == "M&M"
+    assert client.get("/data/v1/stocks/NOPE.json").status_code == 404
+    for bad in ("../secrets.json", "stocks/../../x.json", "meta.txt", "a/b/c.json"):
+        assert client.get(f"/data/v1/{bad}").status_code == 404
+
+
+def test_site_pages_served_not_redirected(client, monkeypatch):
+    flask_app._cache.pop("page:privacy.html", None)
+    monkeypatch.setattr(flask_app, "_fetch_text", lambda url: "<html><head></head><body>Privacy</body></html>")
+    r = client.get("/privacy")
+    assert r.status_code == 200 and b"Privacy" in r.data
+    assert f'<base href="{flask_app.SITE_URL}/">'.encode() in r.data
+    flask_app._cache.pop("page:terms.html", None)
+    monkeypatch.setattr(flask_app, "_fetch_text", lambda url: (_ for _ in ()).throw(OSError("down")))
+    assert client.get("/terms").status_code == 302
